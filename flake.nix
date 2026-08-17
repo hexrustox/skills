@@ -31,26 +31,16 @@
               socketPath = "/tmp/skills/ncap-socket";
               containerName = "skills";
               extraOptions = [
-                "-e"
-                "PNPM_HOME"
-                "-v"
-                "$PNPM_HOME:$PNPM_HOME"
               ];
               wrappers = [
-                "npm"
-                "pnpm"
+                "skills"
               ];
-              preShellHook = ''
-                export PNPM_HOME=''${PNPM_HOME:-$HOME/.local/share/pnpm}
-                mkdir -p "$PNPM_HOME"
-              '';
             };
 
             container =
               pkgs.mkShellNoCC {
                 packages = with pkgs; [
-                  nodejs-slim
-                  pnpm
+                  skills
                   git
                 ];
               };
