@@ -1,6 +1,6 @@
 ---
 name: rust-code-style
-description: Apply Rust code style — cosmetic rules that change how the code reads, never what it computes — covering comments and doc comments, imports and full paths, type annotations, and struct-literal shorthand. Use when writing, editing, or reviewing Rust code: commenting or documenting, choosing `use` vs a qualified path, tidying imports, annotating types, or simplifying struct literals.
+description: Apply Rust code style — cosmetic rules that change how the code reads, never what it computes — covering comments and doc comments, imports and full paths, visibility and `pub` scope, type annotations, and struct-literal shorthand. Use when writing, editing, or reviewing Rust code: commenting or documenting, choosing `use` vs a qualified path, tidying imports, choosing visibility (`pub`, `pub(crate)`, `pub(super)`), annotating types, or simplifying struct literals.
 ---
 
 # Rust code style
@@ -22,6 +22,10 @@ Reach across modules with `crate::` and `super::`, never `..`. `crate::` for any
 Group imports three ways: std first, external crates second, crate-local last, with a blank line between the groups. When a module is used several times, merge its names into one braced import (`use serde::{Deserialize, Serialize}`) rather than one line each. If the project's `rustfmt.toml` sets `group_imports` or `imports_granularity`, the formatter owns grouping and granularity — you only decide what to import, then stay out of its way.
 
 When two crates offer the same name, alias on import (`use legacy::Result as LegacyResult`) when the alias recurs; leave both fully qualified when each appears once.
+
+## Publicity
+
+Keep every item as private as it can be — visibility is a promise to other modules that the item stays, so grant only the reach the item actually earns. Private (the default) covers one module and its children. `pub(super)` covers the parent and its other children. `pub(crate)` covers the whole crate. `pub` covers other crates — the crate's public interface, nothing else. Measure each existing `pub` against what truly reaches it: a `pub` no outside crate consumes is `pub(crate)`; a `pub(crate)` only one module needs is private.
 
 ## Type annotations
 
