@@ -27,3 +27,4 @@ Add `-s <name>` to install one skill, or `-a <agent>` to target a specific agent
 | `rust-test-case-crate` | Parametrized tests with the `test-case` crate | Many cases from one test function |
 | `rust-insta-crate` | Snapshot testing with the `insta` crate | Pinning a value's output in Rust tests |
 | `rust-proptest-crate` | Property-based testing with the `proptest` crate | Invariants that must hold across generated inputs |
+| `rust-miette-crate` | Fancy diagnostics with the `miette` crate: `#[derive(Diagnostic)]` errors, `#[label]` positioned notes, `help` advice, `miette::Result` rendering | Writing, editing, or reviewing miette error types and error handling in Rust |
