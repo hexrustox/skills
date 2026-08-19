@@ -9,6 +9,7 @@ This repo builds personal Agent Skills. First-party skills live under `skills/<n
 - Keep `SKILL.md` under ~500 lines / 5000 tokens. Move detail to `references/` files and tell the agent when to load each (e.g. "read references/x.md if ...").
 - No validation or verification step is required after writing a skill.
 - Write skill content using the installed `writing-for-agents` skill and its `SKILL-MECHANICS.md`; they are the authority on authoring agent-facing documents.
+- When adding a skill, add its row to the README's `Skills` table, drawn from the frontmatter `description`.
 
 ## Layout
 - `skills/` — first-party skills, the repo's output.
