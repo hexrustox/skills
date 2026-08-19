@@ -1,6 +1,6 @@
 ---
 name: writing-error-messages
-description: Write one-voice error messages — the message states what is wrong, one sentence, tokens backticked, advice carried as its own piece outside the message text. Use when writing, editing, reviewing, or context-wrapping (chaining) error text in any language: messages, exception strings, diagnostics, CLI errors. Examples in Rust with color-eyre; the rules are language-agnostic.
+description: "Write one-voice error messages — the message states what is wrong, one sentence, tokens backticked, advice carried as its own piece outside the message text. Use when writing, editing, reviewing, or context-wrapping (chaining) error text in any language: messages, exception strings, diagnostics, CLI errors. Examples in Rust with color-eyre; the rules are language-agnostic."
 ---
 
 # Error messages
