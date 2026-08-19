@@ -11,8 +11,8 @@ These are first-party skills in the standard Agent Skills format ([spec](https:/
 Install with the [skills CLI](https://skills.sh/docs):
 
 ```bash
-npx skills add https://gitlab.com/codnixus/skills --list   # preview the skills
-npx skills add https://gitlab.com/codnixus/skills          # install all skills
+npx skills add https://github.com/hexrustox/skills --list   # preview the skills
+npx skills add https://github.com/hexrustox/skills          # install all skills
 ```
 
 Add `-s <name>` to install one skill, or `-a <agent>` to target a specific agent (e.g. `opencode`).
