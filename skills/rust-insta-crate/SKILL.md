@@ -65,7 +65,7 @@ insta::assert_debug_snapshot!(words, @"");
 
 After acceptance, the value fills the literal. Inline keeps the expected output at the test site (branch-2 readability at the cost of a long macro call); file snapshots keep the test site clean and the snapshot diffable independently. Inline snapshots update in place only via `cargo insta accept` — with no `cargo-insta` available, prefer file snapshots.
 
-**Naming.** Unnamed snapshots derive from the test function name (leading `test_` stripped); multiple assertions in one function count up (`something`, `something-2`). Name snapshots explicitly when a function holds several or the derived name would not read as the pinned outcome — see `naming-rust-tests`. File names are `<module>__<name>.snap`.
+**Naming.** Unnamed snapshots derive from the test function name (leading `test_` stripped); multiple assertions in one function count up (`something`, `something-2`). Name snapshots explicitly when a function holds several or the derived name would not read as the pinned outcome — see `rust-code-style`. File names are `<module>__<name>.snap`.
 
 ### Snapshot names in `#[test_case]`
 
@@ -91,5 +91,5 @@ The output is never trusted automatically — that is the point. Never use the i
 
 - Read `references/redactions-and-filters.md` when the value has volatile parts (decision-tree branch 3): selectors, static/dynamic/sorted/rounded redactions, and regex filters.
 - Decide *whether* the test exists and its type with `choosing-test-type` (branch 4 of this tree points here for property tests).
-- Name tests and snapshots per `naming-rust-tests`.
+- Name tests and snapshots per `rust-code-style`.
 - Docs: https://insta.rs/docs/ · API: https://docs.rs/insta
