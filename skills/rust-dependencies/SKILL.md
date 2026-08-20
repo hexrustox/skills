@@ -1,6 +1,6 @@
 ---
 name: rust-dependencies
-description: "Manage dependencies in a Rust project's Cargo.toml — install or add a dependency or dev-dependency, bump a version requirement, or wire a workspace member to a shared dependency. Every version requirement is written at its exact `major.minor.patch` minimum (`serde = \"1.2.3\"`, meaning `>=1.2.3, <2.0.0`), never `\"1\"`, `\"1.2\"`, `\"^1.2\"`, or `\"=1.2.3\"`. In a workspace, the version lives only in the root manifest's `[workspace.dependencies]` and the using crate activates it with `<dep>.workspace = true`. Use when adding, installing, or bumping a `[dependencies]` or `[dev-dependencies]` entry, editing Cargo.toml, or wiring a crate to a workspace-shared dependency."
+description: "Manage a Rust project's Cargo.toml dependencies — add or install a dependency or dev-dependency, bump a version requirement, or wire a workspace member to a shared dependency. Use when adding, installing, or bumping a `[dependencies]` or `[dev-dependencies]` entry, editing Cargo.toml, or wiring a crate to a workspace-shared dependency."
 ---
 
 # Rust dependency management

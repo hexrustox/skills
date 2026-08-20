@@ -5,7 +5,7 @@ This repo builds personal Agent Skills. First-party skills live under `skills/<n
 ## Skill format
 - `skills/<name>/` holds `SKILL.md` (YAML frontmatter + Markdown body) plus optional `scripts/`, `references/`, `assets/`.
 - `name` and `description` are required frontmatter. `name` must match the parent directory: lowercase alphanumerics and hyphens only — no leading, trailing, or double hyphens.
-- `description` states what the skill does and when to use it, with keywords matching likely prompts; it is the only thing agents see at startup, so it decides activation.
+- `description` states what the skill does and when to use it, with keywords matching likely prompts; it is the only thing agents see at startup, so it decides activation. Keep it to the *what* and the *when* only — no how/detail (details live in the SKILL.md body). Under 400 characters (the spec max is 1024).
 - Keep `SKILL.md` under ~500 lines / 5000 tokens. Move detail to `references/` files and tell the agent when to load each (e.g. "read references/x.md if ...").
 - No validation or verification step is required after writing a skill.
 - Write skill content using the installed `writing-for-agents` skill and its `SKILL-MECHANICS.md`; they are the authority on authoring agent-facing documents.
