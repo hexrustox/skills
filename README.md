@@ -22,6 +22,7 @@ Add `-s <name>` to install one skill, or `-a <agent>` to target a specific agent
 | Skill | What it does | When to use |
 | --- | --- | --- |
 | `choosing-test-type` | Decision tree for unit, integration, property, or no test, possibly more than one type per behavior | Writing or reviewing tests, any language |
+| `writing-test-cases` | Design the case set for a behavior: spec-first expectations, one case per path, strong assertions, red-proofed | Writing or adding tests, or reviewing a suite, any language |
 | `rust-dependencies` | Write every Cargo.toml dependency at its exact `major.minor.patch` minimum; route workspace versions through `[workspace.dependencies]` with per-crate `workspace = true` activation | Adding, installing, or bumping a dependency or dev-dependency in a Rust project |
 | `writing-error-messages` | One-voice error message rules | Writing, editing, or reviewing error text, any language |
 | `rust-code-style` | Cosmetic Rust style: comments, naming, imports, visibility, annotations | Writing, editing, or reviewing Rust |
