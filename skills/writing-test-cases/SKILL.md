@@ -3,7 +3,7 @@ name: writing-test-cases
 description: Write test cases for a behavior — derive expected outcomes from the spec before the implementation, one case per distinct path across equivalence classes and boundaries, assert the outcome not the implementation, isolate for determinism, and prove each case goes red on a broken path. Use when writing or adding tests, choosing cases, or reviewing whether a suite catches a regression.
 ---
 
-Decide the test types with `choosing-test-type` first if they are undecided. This skill designs the *cases* within a chosen type, any language; the crate skills (`rust-insta-crate`, `rust-proptest-crate`, `rust-test-case-crate`) are the tooling for their type.
+This skill designs the *cases* within a chosen test type, any language. If the test types for a behavior are undecided, see Pointers.
 
 Design the cases for one behavior at a time. A case is an input and the outcome it must pin. A set is good when every distinct path the behavior can take is pinned by exactly one case, each assertion is strong enough to fail if the behavior broke, and each case is proven red.
 
@@ -39,10 +39,15 @@ Done when every distinct path's case has gone red against a deliberate fault and
 
 ## 6. Name for diagnosis
 
-Name each case as behavior + pinned outcome, so a failing run names the contract broken. In Rust, follow the `rust-code-style` naming rules.
+Name each case as behavior + pinned outcome, so a failing run names the contract broken. In Rust, see Pointers for the naming rules.
 
 Done when each case name states what it tests and what it pins.
 
 ## Reviewing a suite
 
 Audit existing tests through the same steps in reverse: name the contract each test pins (a test pinning no contract is dead), check it maps to one distinct path (duplicates add nothing), check the assertion is strong enough to fail for the behavior, check isolation, and prove red by breaking each path.
+
+## Pointers
+
+- When the test types for a behavior are undecided, run the `choosing-test-type` skill and follow it.
+- When naming cases in Rust, run the `rust-code-style` skill and follow it.

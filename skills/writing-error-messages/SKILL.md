@@ -79,10 +79,3 @@ specs. Run them over every message you write or touch.
 | `` missing `name` field `` | `The name field was not provided.` |
 | `` destination directory does not exist `` + `wrap_err("cannot write `out.yaml`")` | `cannot write `out.yaml`: destination directory does not exist` |
 | message: `list index 3 out of range` (data unquoted) | `error: you must use a valid index` (prescribes, states no facts) |
-
-## Rust implementation
-
-In Rust, carry each piece on the structure that renders it: the message is the
-`#[error]` fragment, chained context is `.wrap_err()`, the positioned note is
-`#[label]`, and advice is `help` — see `rust-miette-crate` for the `miette`
-mechanics.

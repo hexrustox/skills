@@ -22,4 +22,3 @@ A behavior answers more than one branch when each holds a distinct risk. A trans
 
 The guard against doubling up: a type earns place only for the risk it alone can break. A boundary that merely passes data through is fake-able — it carries no risk of its own, so its risk is the transformation and it belongs on branches 2–3, not on a redundant integration test. Likewise, when a property test already ranges over the inputs, a unit test only earns its place if it pins a path the property run would not catch; when a unit test already pins every path, no further type earns its place for that same risk.
 
-Once a behavior earns its types, design the cases themselves with `writing-test-cases`: spec-first expectations, one case per path, strong assertions, and the red proof.
