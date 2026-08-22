@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repo builds personal Agent Skills. First-party skills live under `skills/<name>/SKILL.md`; the format spec and best practices are at https://agentskills.io/ (spec, best practices, evaluating skills, optimizing descriptions).
+This repo builds personal Agent Skills. First-party skills live under `skills/<category>/<name>/SKILL.md`, grouped into `skills/general/` (language-agnostic) and `skills/rust/` (Rust-specific); the format spec and best practices are at https://agentskills.io/ (spec, best practices, evaluating skills, optimizing descriptions).
 
 ## Skill format
 - `skills/<name>/` holds `SKILL.md` (YAML frontmatter + Markdown body) plus optional `scripts/`, `references/`, `assets/`.

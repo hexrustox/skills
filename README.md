@@ -1,6 +1,6 @@
 # skills
 
-Personal collection of Agent Skills — currently Rust testing and code style, not limited to Rust.
+Personal collection of Agent Skills — language-agnostic testing and writing skills, plus Rust-specific testing and code style.
 
 ## About
 
@@ -19,12 +19,19 @@ Add `-s <name>` to install one skill, or `-a <agent>` to target a specific agent
 
 ## Skills
 
+### General
+
 | Skill | What it does | When to use |
 | --- | --- | --- |
 | `choosing-test-type` | Decision tree for unit, integration, property, or no test, possibly more than one type per behavior | Writing or reviewing tests, any language |
 | `writing-test-cases` | Design the case set for a behavior: spec-first expectations, one case per path, strong assertions, red-proofed | Writing or adding tests, or reviewing a suite, any language |
-| `rust-dependencies` | Write every Cargo.toml dependency at its exact `major.minor.patch` minimum; route workspace versions through `[workspace.dependencies]` with per-crate `workspace = true` activation | Adding, installing, or bumping a dependency or dev-dependency in a Rust project |
 | `writing-error-messages` | One-voice error message rules | Writing, editing, or reviewing error text, any language |
+
+### Rust
+
+| Skill | What it does | When to use |
+| --- | --- | --- |
+| `rust-dependencies` | Write every Cargo.toml dependency at its exact `major.minor.patch` minimum; route workspace versions through `[workspace.dependencies]` with per-crate `workspace = true` activation | Adding, installing, or bumping a dependency or dev-dependency in a Rust project |
 | `rust-code-style` | Cosmetic Rust style: comments, naming, imports, visibility, annotations | Writing, editing, or reviewing Rust |
 | `rust-test-case-crate` | Parametrized tests with the `test-case` crate | Many cases from one test function |
 | `rust-insta-crate` | Snapshot testing with the `insta` crate | Pinning a value's output in Rust tests |
