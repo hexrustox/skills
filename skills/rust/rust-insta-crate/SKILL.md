@@ -28,7 +28,9 @@ Add insta as a dev-dependency. No features are needed for the core macros; enabl
 insta = "1"
 ```
 
-`assert_json_snapshot!` needs the `json` feature; `toml`, `ron`, `csv`, and `yaml` likewise. Enable `redactions` and `filters` features only when the value has volatile parts (branch 3). Do not try to install `cargo-insta`; use the `cargo insta` subcommands if present, and review snapshot files directly otherwise.
+`assert_json_snapshot!` needs the `json` feature; `toml`, `ron`, `csv`, and `yaml` likewise. Enable `redactions` and `filters` features only when the value has volatile parts (branch 3).
+
+`cargo insta` is the companion CLI tool for reviewing and accepting snapshots (installed via the `cargo-insta` crate). This skill does not install it — do not try to install `cargo-insta`. If `cargo insta` returns command not found, pause and notify the user. Everything below assumes `cargo insta` is installed; the macros themselves only need the `insta` library, which the dev-dependency provides.
 
 ## The macros
 
@@ -59,7 +61,7 @@ Snapshots store as a `.snap` file beside the test by default; the *inline* form 
 insta::assert_debug_snapshot!(words, @"");
 ```
 
-After acceptance, the value fills the literal. Inline keeps the expected output at the test site (branch-2 readability at the cost of a long macro call); file snapshots keep the test site clean and the snapshot diffable independently. Inline snapshots update in place only via `cargo insta accept` — with no `cargo-insta` available, prefer file snapshots.
+After acceptance, the value fills the literal. Inline keeps the expected output at the test site (branch-2 readability at the cost of a long macro call); file snapshots keep the test site clean and the snapshot diffable independently. Inline snapshots update in place only via `cargo insta accept`; that is the tooling trade-off to weigh against file snapshots.
 
 **Naming.** Unnamed snapshots derive from the test function name (leading `test_` stripped); multiple assertions in one function count up (`something`, `something-2`). Name snapshots explicitly when a function holds several or the derived name would not read as the pinned outcome. File names are `<module>__<name>.snap`.
 
