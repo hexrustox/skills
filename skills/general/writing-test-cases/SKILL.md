@@ -1,11 +1,11 @@
 ---
 name: writing-test-cases
-description: Write test cases for a behavior — derive expected outcomes from the spec before the implementation, one case per distinct path across equivalence classes and boundaries, assert the outcome not the implementation, isolate for determinism, and prove each case goes red on a broken path. Use when writing or adding tests, choosing cases, or reviewing whether a suite catches a regression.
+description: Write test cases for a behavior — derive expected outcomes from the spec before the implementation, one case per distinct path across equivalence classes and boundaries, assert the outcome not the implementation, isolate for determinism. Use when writing or adding tests, choosing cases, or reviewing whether a suite catches a regression.
 ---
 
 This skill designs the *cases* within a chosen test type, any language. If the test types for a behavior are undecided, see Pointers.
 
-Design the cases for one behavior at a time. A case is an input and the outcome it must pin. A set is good when every distinct path the behavior can take is pinned by exactly one case, each assertion is strong enough to fail if the behavior broke, and each case is proven red.
+Design the cases for one behavior at a time. A case is an input and the outcome it must pin. A set is good when every distinct path the behavior can take is pinned by exactly one case, and each assertion is strong enough to fail if the behavior broke.
 
 ## 1. Derive the contract first, spec-first
 
@@ -31,13 +31,7 @@ Each case standalone: no shared mutable state with other cases, no dependence on
 
 Done when each case passes alone, in any order, repeatedly.
 
-## 5. Prove red
-
-For every distinct path, break its behavior — wrong branch, wrong value, dropped guard — run the tests, and confirm that path's case fails. Restore the code. A case that stays green while its path is broken never tested that path: fix or delete it.
-
-Done when every distinct path's case has gone red against a deliberate fault and green again on restore.
-
-## 6. Name for diagnosis
+## 5. Name for diagnosis
 
 Name each case as behavior + pinned outcome, so a failing run names the contract broken. In Rust, see Pointers for the naming rules.
 
@@ -45,7 +39,7 @@ Done when each case name states what it tests and what it pins.
 
 ## Reviewing a suite
 
-Audit existing tests through the same steps in reverse: name the contract each test pins (a test pinning no contract is dead), check it maps to one distinct path (duplicates add nothing), check the assertion is strong enough to fail for the behavior, check isolation, and prove red by breaking each path.
+Audit existing tests through the same steps in reverse: name the contract each test pins (a test pinning no contract is dead), check it maps to one distinct path (duplicates add nothing), check the assertion is strong enough to fail for the behavior, check isolation.
 
 ## Pointers
 
