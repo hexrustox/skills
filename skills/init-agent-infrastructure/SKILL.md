@@ -2,8 +2,7 @@
 name: init-agent-infrastructure
 description: Initialize or audit the project's AGENTS.md, split oversized content into docs/agents/, and delegate Matt Pocock skills setup to setup-matt-pocock-skills.
 metadata:
-  version: "1.0.0"
-  author: "hexrustox <231717567+hexrustox@users.noreply.github.com>"
+  version: "1.0.1"
 disable-model-invocation: true
 ---
 
