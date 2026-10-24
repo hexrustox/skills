@@ -24,19 +24,27 @@
           extraOptions = [
             "-e"
             "NIX_PATH"
+            "-v"
+            "xdg-bin:/root/.local/bin"
+            "-v"
+            "xdg-data:/root/.local/share"
           ];
           wrappers = [
             "nixd"
+            "skillevaluator"
           ];
         };
         container = pkgs.mkShellNoCC {
           packages = with pkgs; [
+            git
             nixd
             nixfmt
-
             skills
-            git
+            uv
           ];
+          shellHook = ''
+            export PATH="/root/.local/bin:$PATH"
+          '';
         };
       };
 
