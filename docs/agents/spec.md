@@ -25,6 +25,7 @@ description: Extracts text and tables from PDFs, fills forms, and merges PDFs. U
 | --- | --- | --- |
 | `name` | Yes | 1–64 characters; lowercase letters, digits, and hyphens only; no leading or trailing hyphen and no `--`; match the skill directory name. |
 | `description` | Yes | 1–1024 characters; state what the skill does and when to use it; include the keywords that identify the task. |
+| `disable-model-invocation` | No | Set `true` to make the skill user-invoked: only the human can invoke it by name, no other skill can reach it, and its `description` stays out of the agent's always-loaded context, becoming a human-facing one-line summary. Omit it to make the skill model-invoked: the agent and other skills can reach it, at the cost of always loading `description`. Set `true` only when the skill fires by hand and nothing else must invoke it. |
 | `license` | No | Set a license name or a reference to a bundled license file. |
 | `compatibility` | No | 1–500 characters; state environment requirements only, such as product, system packages, network access, or runtime. |
 | `metadata` | No | Add a string-to-string map for extra properties; use reasonably unique keys. |

@@ -7,14 +7,14 @@ Run the static gate first. The loop below measures behavior; it does not replace
 ## 1. Gate on static checks
 
 ```bash
-skillevaluator tier1 skills/<path> -o eval/<skill>/tier1
+skillevaluator tier1 skills/<path> -o .eval/<skill>/tier1
 ```
 
 Fix every blocking finding and rerun. A skill that fails the gate is not ready for behavioral evaluation.
 
 ## 2. Write test cases
 
-Create `eval/<skill>/evals.json`. Start with two or three cases: enough to expose a pattern, small enough to iterate on.
+Create `.eval/<skill>/evals.json`. Start with two or three cases: enough to expose a pattern, small enough to iterate on.
 
 ```json
 {
@@ -32,14 +32,14 @@ Create `eval/<skill>/evals.json`. Start with two or three cases: enough to expos
 
 Write prompts that sound like users: file paths, column names, context, casual phrasing. Vary the phrasing and level of detail across cases. Make at least one case a boundary: malformed input, an ambiguous request, or a task the skill almost handles.
 
-`expected_output` describes success for the reviewer. Assertions are the gradable claims and come after the first run. List input files relative to `eval/<skill>` and copy them into the run's working directory.
+`expected_output` describes success for the reviewer. Assertions are the gradable claims and come after the first run. List input files relative to `.eval/<skill>` and copy them into the run's working directory.
 
 ## 3. Run each case twice
 
-Store the test cases and artifacts under `eval/<skill>/`:
+Store the test cases and artifacts under `.eval/<skill>/`:
 
 ```text
-eval/csv-analyzer/
+.eval/csv-analyzer/
 ├── evals.json
 ├── files/
 │   └── sales.csv
@@ -53,7 +53,7 @@ eval/csv-analyzer/
             └── ...
 ```
 
-Each run starts in a fresh context: a subagent or a separate session. The authoring session already knows the skill and the intended output, so it cannot stand in for a run.
+Dispatch each run to a fresh-context subagent. The authoring session already knows the skill and the intended output, so it cannot stand in for a run.
 
 Give the run agent four things: the skill path (or no skill), the prompt, the input files, and the output directory. Withhold the expected output, the assertions, and the comparison purpose. Have it write every produced file under `outputs/`.
 
@@ -134,10 +134,10 @@ Stop when all assertions pass and feedback is empty, or when two consecutive ite
 An evaluation is done when:
 
 - `skillevaluator tier1` passes.
-- The eval suite (`eval/<skill>/evals.json` and its input files) and iteration artifacts are under `eval/<skill>/`.
+- The eval suite (`.eval/<skill>/evals.json` and its input files) and iteration artifacts are under `.eval/<skill>/`.
 - Every case ran with and without the skill (or the old skill) in fresh contexts.
 - Transcripts confirm the skill loaded only in the with-skill runs.
 - Every assertion has an evidence-backed pass or fail.
-- `benchmark.json` and `feedback.json` exist under `eval/<skill>/iteration-N/`.
+- `benchmark.json` and `feedback.json` exist under `.eval/<skill>/iteration-N/`.
 - The skill changes address general causes rather than the test cases.
 - The final report states the lift, its cost, and anything the human still dislikes.
