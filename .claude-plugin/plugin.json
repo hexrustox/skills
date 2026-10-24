@@ -1,5 +1,6 @@
 {
   "skills": [
-    "./skills/init-agent-infrastructure"
+    "./skills/init-agent-infrastructure",
+    "./skills/rust/rust-code-style"
   ]
 }
