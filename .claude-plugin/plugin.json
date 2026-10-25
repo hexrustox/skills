@@ -2,6 +2,7 @@
   "skills": [
     "./skills/init-agent-infrastructure",
     "./skills/rust/rust-code-style",
-    "./skills/to-behavior-contract"
+    "./skills/to-behavior-contract",
+    "./skills/audit-behavior-contract"
   ]
 }
