@@ -2,13 +2,13 @@
 name: to-behavior-contract
 description: "Synthesize the current conversation and codebase into behavior-contract docs under `docs/behavior/`."
 metadata:
-  version: "1.2.3"
+  version: "1.2.4"
 disable-model-invocation: true
 ---
 
 # To Behavior Contract
 
-Turn the current conversation and codebase into behavior contracts under `docs/behavior/`. This skill is the docs-side companion to `/to-spec`: it never replaces the tracker spec. It asks two questions before writing: first the proposed file set and its division of behavior, then any behavior the conversation leaves unspecified.
+Turn the current conversation and codebase into behavior contracts under `docs/behavior/`. It asks two questions before writing: first the proposed file set and its division of behavior, then any behavior the conversation leaves unspecified.
 
 ## Instructions
 
