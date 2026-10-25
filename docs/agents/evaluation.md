@@ -7,10 +7,12 @@ Run the static gate first. The loop below measures behavior; it does not replace
 ## 1. Gate on static checks
 
 ```bash
-skillevaluator tier1 skills/<path> -o .eval/<skill>/tier1
+skillevaluator tier1 skills/<path> --checks schema,unicode,quality,version -r markdown -o .eval/<skill>/tier1
 ```
 
 Fix every blocking finding and rerun. A skill that fails the gate is not ready for behavioral evaluation.
+
+The `Author not specified in metadata` finding from `skillevaluator` is accepted in this repo; treat it as non-blocking and do not add an `author` key just to silence it.
 
 ## 2. Write test cases
 
