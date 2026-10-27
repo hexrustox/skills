@@ -8,3 +8,17 @@ This repo authors agent skills and packages them as a Claude Code plugin.
 
 ## Verification
 - After creating a new skill or changing `.claude-plugin/plugin.json`, run `jq -e . .claude-plugin/plugin.json >/dev/null` and `diff <(find skills -name SKILL.md -printf '%h\n' | sort) <(jq -r '.skills[]' .claude-plugin/plugin.json | sed 's|^\./||' | sort)`. Done when both exit 0.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in this repo's GitHub Issues, driven by the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles, using the default label strings. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
