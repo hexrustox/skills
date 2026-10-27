@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import tempfile
@@ -20,11 +21,31 @@ class CliTestCase(unittest.TestCase):
         self._temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self._temp_dir.cleanup)
         self.root = Path(self._temp_dir.name)
+        self._registrations: dict[Path, list[str]] = {}
 
-    def write_skill(self, content: str, name: str = "example") -> Path:
-        skill_dir = self.root / name
+    def write_manifest(
+        self, entries: list[str], *, plugin_root: Path | None = None
+    ) -> Path:
+        manifest = (plugin_root or self.root) / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(json.dumps({"skills": entries}), encoding="utf-8")
+        return manifest
+
+    def write_skill(
+        self,
+        content: str,
+        name: str = "example",
+        *,
+        base: Path | None = None,
+        register: bool = True,
+    ) -> Path:
+        skill_dir = (base or self.root) / name
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(textwrap.dedent(content), encoding="utf-8")
+        if register:
+            entries = self._registrations.setdefault(skill_dir.parent, [])
+            entries.append(f"./{name}")
+            self.write_manifest(entries, plugin_root=skill_dir.parent)
         return skill_dir
 
     def test_valid_skill_exits_zero_with_summary(self) -> None:
@@ -711,6 +732,167 @@ class CliTestCase(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("error body.empty", result.stdout)
+
+    def test_unregistered_skill_exits_one_with_registration_rule(self) -> None:
+        skill_dir = self.write_skill(
+            """\
+            ---
+            name: example
+            description: Does an example task.
+            metadata:
+              version: "1.0.0"
+            ---
+
+            # Example
+            """,
+            register=False,
+        )
+        self.write_manifest(["./other"])
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("error plugin.unregistered", result.stdout)
+
+    def test_missing_plugin_manifest_exits_one_with_manifest_rule(self) -> None:
+        skill_dir = self.write_skill(
+            """\
+            ---
+            name: example
+            description: Does an example task.
+            metadata:
+              version: "1.0.0"
+            ---
+
+            # Example
+            """,
+            register=False,
+        )
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("error plugin.manifest-missing", result.stdout)
+
+    def test_equivalent_manifest_path_spellings_register_the_skill(self) -> None:
+        entries = ["./example", "example", "././example/", ".\\example"]
+        for index, entry in enumerate(entries):
+            with self.subTest(entry=entry):
+                base = self.root / f"case-{index}"
+                skill_dir = self.write_skill(
+                    """\
+                    ---
+                    name: example
+                    description: Does an example task.
+                    metadata:
+                      version: "1.0.0"
+                    ---
+
+                    # Example
+                    """,
+                    base=base,
+                    register=False,
+                )
+                self.write_manifest([entry], plugin_root=base)
+
+                result = run_cli(str(skill_dir), cwd=self.root)
+
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertIn("0 errors", result.stdout)
+
+    def test_nearest_plugin_manifest_governs_registration(self) -> None:
+        nested = self.root / "nested"
+        skill_dir = self.write_skill(
+            """\
+            ---
+            name: example
+            description: Does an example task.
+            metadata:
+              version: "1.0.0"
+            ---
+
+            # Example
+            """,
+            base=nested,
+            register=False,
+        )
+        self.write_manifest(["./nested/example"])
+        self.write_manifest(["./other"], plugin_root=nested)
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("error plugin.unregistered", result.stdout)
+
+    def test_invalid_plugin_manifest_json_exits_one_with_manifest_rule(self) -> None:
+        skill_dir = self.write_skill(
+            """\
+            ---
+            name: example
+            description: Does an example task.
+            metadata:
+              version: "1.0.0"
+            ---
+
+            # Example
+            """,
+            register=False,
+        )
+        manifest = self.root / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir()
+        manifest.write_text("{not json", encoding="utf-8")
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("error plugin.manifest-invalid", result.stdout)
+
+    def test_registered_skill_reached_through_symlink_exits_zero(self) -> None:
+        plugin_root = self.root / "plugin"
+        skill_dir = self.write_skill(
+            """\
+            ---
+            name: example
+            description: Does an example task.
+            metadata:
+              version: "1.0.0"
+            ---
+
+            # Example
+            """,
+            base=self.root / "targets",
+            register=False,
+        )
+        self.write_manifest(["./example"], plugin_root=plugin_root)
+        linked_skill = plugin_root / "example"
+        linked_skill.symlink_to(skill_dir, target_is_directory=True)
+
+        result = run_cli(str(linked_skill), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_plugin_manifest_without_skills_array_exits_one_with_manifest_rule(self) -> None:
+        skill_dir = self.write_skill(
+            """\
+            ---
+            name: example
+            description: Does an example task.
+            metadata:
+              version: "1.0.0"
+            ---
+
+            # Example
+            """,
+            register=False,
+        )
+        manifest = self.root / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir()
+        manifest.write_text(json.dumps({"skills": "example"}), encoding="utf-8")
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("error plugin.manifest-invalid", result.stdout)
 
 
 if __name__ == "__main__":

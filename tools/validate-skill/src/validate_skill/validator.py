@@ -1,3 +1,6 @@
+import json
+import os
+import posixpath
 import re
 from pathlib import Path
 
@@ -267,12 +270,83 @@ def _directory_name(path: Path) -> str:
     return path.parent.name or path.resolve().parent.name
 
 
+def _find_plugin_manifest(skill_dir: Path) -> Path | None:
+    for parent in (skill_dir, *skill_dir.parents):
+        candidate = parent / ".claude-plugin" / "plugin.json"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _normalize_manifest_entry(entry: str) -> str:
+    return posixpath.normpath(entry.replace("\\", "/"))
+
+
+def _load_manifest(manifest: Path) -> tuple[list[str] | None, Finding | None]:
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        return (
+            None,
+            _error(
+                "plugin.manifest-invalid",
+                f"could not parse {manifest}: {error}",
+                str(manifest),
+            ),
+        )
+    if (
+        not isinstance(data, dict)
+        or not isinstance(data.get("skills"), list)
+        or not all(isinstance(entry, str) for entry in data["skills"])
+    ):
+        return (
+            None,
+            _error(
+                "plugin.manifest-invalid",
+                f"{manifest} must contain a 'skills' array of strings",
+                str(manifest),
+            ),
+        )
+    return data["skills"], None
+
+
+def _check_plugin_registration(skill_file: Path) -> list[Finding]:
+    skill_dir = Path(os.path.abspath(skill_file)).parent
+    manifest = _find_plugin_manifest(skill_dir)
+    if manifest is None:
+        return [
+            _error(
+                "plugin.manifest-missing",
+                f"no .claude-plugin/plugin.json found above {skill_dir}",
+                "plugin",
+            )
+        ]
+
+    entries, error = _load_manifest(manifest)
+    if error is not None:
+        return [error]
+
+    plugin_root = manifest.parent.parent
+    relative = skill_dir.relative_to(plugin_root).as_posix()
+    registered = {_normalize_manifest_entry(entry) for entry in entries or []}
+    if relative not in registered:
+        return [
+            _error(
+                "plugin.unregistered",
+                f"skill directory '{relative}' is not registered in {manifest}",
+                "plugin",
+            )
+        ]
+    return []
+
+
 def validate_skill(path: Path) -> SkillResult:
     result = SkillResult(path=path)
     text = path.read_text(encoding="utf-8")
 
     frontmatter, body, findings = _parse_frontmatter(text)
     result.findings.extend(findings)
+    result.findings.extend(_check_plugin_registration(path))
     if frontmatter is None:
         return result
 
