@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import posixpath
 import re
@@ -9,6 +10,16 @@ import yaml
 from validate_skill.model import Finding, SkillResult
 
 _NAME_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+_MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]*\]\(((?:[^()\n]|\([^()\n]*\))*)\)")
+_MARKDOWN_REFERENCE_PATTERN = re.compile(
+    r"^[ \t]{0,3}\[[^\]]+\]:[ \t]*(<[^>]*>|\S+)", re.MULTILINE
+)
+_INLINE_CODE_PATTERN = re.compile(r"`([^`\n]+)`")
+_REFERENCE_DIRECTORIES = frozenset({"scripts", "references", "assets"})
+_URL_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
+_MAX_BODY_LINES = 500
+_MAX_BODY_TOKENS = 5_000
+_CHARS_PER_TOKEN = 4
 _KNOWN_FIELDS = frozenset(
     {
         "name",
@@ -260,14 +271,133 @@ def _check_unknown_keys(frontmatter: dict[str, object]) -> list[Finding]:
     ]
 
 
+def _normalize_path(value: str) -> str:
+    return posixpath.normpath(value.replace("\\", "/"))
+
+
+def _strip_fenced_code(body: str) -> str:
+    lines = body.splitlines(keepends=True)
+    kept: list[str] = []
+    in_fence = False
+    for line in lines:
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+            kept.append("\n" if line.endswith("\n") else "")
+            continue
+        kept.append(("\n" if line.endswith("\n") else "") if in_fence else line)
+    return "".join(kept)
+
+
 def _check_body(body: str) -> list[Finding]:
-    if not body.strip():
+    content = body.strip()
+    if not content:
         return [_error("body.empty", "SKILL.md body must not be empty", "body")]
-    return []
+
+    findings: list[Finding] = []
+    line_count = len(content.splitlines())
+    if line_count > _MAX_BODY_LINES:
+        findings.append(
+            _warning(
+                "body.lines",
+                f"SKILL.md body has {line_count} lines; keep it to {_MAX_BODY_LINES} or fewer",
+                "body",
+            )
+        )
+
+    token_estimate = math.ceil(len(content) / _CHARS_PER_TOKEN)
+    if token_estimate > _MAX_BODY_TOKENS:
+        findings.append(
+            _warning(
+                "body.tokens",
+                f"SKILL.md body is estimated at {token_estimate} tokens "
+                f"(characters / {_CHARS_PER_TOKEN}); keep it to {_MAX_BODY_TOKENS} or fewer",
+                "body",
+            )
+        )
+    return findings
 
 
-def _directory_name(path: Path) -> str:
-    return path.parent.name or path.resolve().parent.name
+def _normalize_reference(target: str) -> str | None:
+    candidate = target.strip()
+    if not candidate:
+        return None
+    if candidate.startswith("<") and candidate.endswith(">"):
+        candidate = candidate[1:-1].strip()
+    else:
+        parts = candidate.split()
+        if not parts:
+            return None
+        candidate = parts[0]
+
+    candidate = candidate.split("#", 1)[0].split("?", 1)[0].strip()
+    if not candidate:
+        return None
+    if candidate.startswith(("#", "/", "~", "\\")):
+        return None
+    if _URL_SCHEME_PATTERN.match(candidate):
+        return None
+
+    normalized = _normalize_path(candidate)
+    first_part = normalized.split("/", 1)[0]
+    if first_part not in _REFERENCE_DIRECTORIES:
+        return None
+    return normalized
+
+
+def _line_number(body: str, offset: int) -> int:
+    return body.count("\n", 0, offset) + 1
+
+
+def _iter_references(body: str) -> list[tuple[str, int]]:
+    references: list[tuple[str, int]] = []
+    scannable = _strip_fenced_code(body)
+
+    for pattern in (_MARKDOWN_LINK_PATTERN, _MARKDOWN_REFERENCE_PATTERN):
+        for match in pattern.finditer(scannable):
+            normalized = _normalize_reference(match.group(1))
+            if normalized is not None:
+                references.append(
+                    (normalized, _line_number(body, match.start()))
+                )
+
+    for match in _INLINE_CODE_PATTERN.finditer(scannable):
+        for token in match.group(1).split():
+            normalized = _normalize_reference(token)
+            if normalized is not None:
+                references.append(
+                    (normalized, _line_number(body, match.start()))
+                )
+
+    return references
+
+
+def _check_references(body: str, skill_root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    seen: set[str] = set()
+
+    for normalized, line_number in _iter_references(body):
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        location = f"body:{line_number}"
+        if len(normalized.split("/")) > 2:
+            findings.append(
+                _warning(
+                    "reference.too-deep",
+                    f"reference '{normalized}' is more than one level below the skill root",
+                    location,
+                )
+            )
+        if not (skill_root / normalized).exists():
+            findings.append(
+                _warning(
+                    "reference.missing",
+                    f"referenced path '{normalized}' does not exist",
+                    location,
+                )
+            )
+
+    return findings
 
 
 def _find_plugin_manifest(skill_dir: Path) -> Path | None:
@@ -279,7 +409,7 @@ def _find_plugin_manifest(skill_dir: Path) -> Path | None:
 
 
 def _normalize_manifest_entry(entry: str) -> str:
-    return posixpath.normpath(entry.replace("\\", "/"))
+    return _normalize_path(entry)
 
 
 def _load_manifest(manifest: Path) -> tuple[list[str] | None, Finding | None]:
@@ -310,8 +440,7 @@ def _load_manifest(manifest: Path) -> tuple[list[str] | None, Finding | None]:
     return data["skills"], None
 
 
-def _check_plugin_registration(skill_file: Path) -> list[Finding]:
-    skill_dir = Path(os.path.abspath(skill_file)).parent
+def _check_plugin_registration(skill_dir: Path) -> list[Finding]:
     manifest = _find_plugin_manifest(skill_dir)
     if manifest is None:
         return [
@@ -341,19 +470,22 @@ def _check_plugin_registration(skill_file: Path) -> list[Finding]:
 
 
 def validate_skill(path: Path) -> SkillResult:
+    skill_file = Path(os.path.abspath(path))
+    skill_dir = skill_file.parent
     result = SkillResult(path=path)
-    text = path.read_text(encoding="utf-8")
+    text = skill_file.read_text(encoding="utf-8")
 
     frontmatter, body, findings = _parse_frontmatter(text)
     result.findings.extend(findings)
-    result.findings.extend(_check_plugin_registration(path))
+    result.findings.extend(_check_plugin_registration(skill_dir))
     if frontmatter is None:
         return result
 
-    result.findings.extend(_check_name(frontmatter, _directory_name(path)))
+    result.findings.extend(_check_name(frontmatter, skill_dir.name))
     result.findings.extend(_check_description(frontmatter))
     result.findings.extend(_check_optional_fields(frontmatter))
     result.findings.extend(_check_metadata(frontmatter))
     result.findings.extend(_check_unknown_keys(frontmatter))
     result.findings.extend(_check_body(body))
+    result.findings.extend(_check_references(body, skill_dir))
     return result

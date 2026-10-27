@@ -48,6 +48,20 @@ class CliTestCase(unittest.TestCase):
             self.write_manifest(entries, plugin_root=skill_dir.parent)
         return skill_dir
 
+    def write_valid_skill(
+        self, body: str, *, name: str = "example", base: Path | None = None
+    ) -> Path:
+        content = (
+            "---\n"
+            f"name: {name}\n"
+            "description: Does an example task.\n"
+            "metadata:\n"
+            '  version: "1.0.0"\n'
+            "---\n\n"
+            f"{body}\n"
+        )
+        return self.write_skill(content, name=name, base=base)
+
     def test_valid_skill_exits_zero_with_summary(self) -> None:
         skill_dir = self.write_skill(
             """\
@@ -732,6 +746,145 @@ class CliTestCase(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("error body.empty", result.stdout)
+
+    def test_body_over_500_lines_warns_and_exits_zero(self) -> None:
+        body = "\n".join(f"Line {index}" for index in range(501))
+        skill_dir = self.write_valid_skill(body)
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("warning body.lines", result.stdout)
+        self.assertIn("1 skill checked, 0 errors, 1 warning", result.stdout)
+
+    def test_body_over_5000_estimated_tokens_warns_and_exits_zero(self) -> None:
+        body = "x" * 20_001
+        skill_dir = self.write_valid_skill(body)
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("warning body.tokens", result.stdout)
+        self.assertIn("1 skill checked, 0 errors, 1 warning", result.stdout)
+
+    def test_missing_local_references_warn_and_exit_zero(self) -> None:
+        skill_dir = self.write_valid_skill(
+            "See [the guide](references/guide.md), the logo in "
+            "[assets](assets/logo.png), and run `scripts/run.sh`."
+        )
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("warning reference.missing", result.stdout)
+        self.assertIn("1 skill checked, 0 errors, 3 warnings", result.stdout)
+
+    def test_references_in_fenced_code_are_ignored(self) -> None:
+        skill_dir = self.write_valid_skill(
+            "```markdown\n"
+            "See [the guide](references/missing.md) and run `scripts/missing.sh`.\n"
+            "```"
+        )
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("warning reference.", result.stdout)
+        self.assertIn("0 errors, 0 warnings", result.stdout)
+
+    def test_reference_style_link_is_checked(self) -> None:
+        skill_dir = self.write_valid_skill(
+            "See [the guide][guide].\n\n[guide]: references/missing.md"
+        )
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("warning reference.missing", result.stdout)
+        self.assertIn("1 skill checked, 0 errors, 1 warning", result.stdout)
+
+    def test_multiple_paths_in_one_code_span_are_checked(self) -> None:
+        skill_dir = self.write_valid_skill(
+            "Run `scripts/run.sh references/guide.md`."
+        )
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("warning reference.missing", result.stdout)
+        self.assertIn("1 skill checked, 0 errors, 2 warnings", result.stdout)
+
+    def test_reference_with_parentheses_is_checked(self) -> None:
+        skill_dir = self.write_valid_skill("Read [the guide](references/guide_(v2).md).")
+        reference = skill_dir / "references" / "guide_(v2).md"
+        reference.parent.mkdir(parents=True)
+        reference.write_text("# Guide\n", encoding="utf-8")
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("warning reference.", result.stdout)
+        self.assertIn("0 errors, 0 warnings", result.stdout)
+
+    def test_reference_more_than_one_level_below_root_warns_and_exits_zero(self) -> None:
+        skill_dir = self.write_valid_skill("Run `scripts/deep/run.sh`.")
+        script = skill_dir / "scripts" / "deep" / "run.sh"
+        script.parent.mkdir(parents=True)
+        script.write_text("#!/bin/sh\n", encoding="utf-8")
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("warning reference.too-deep", result.stdout)
+        self.assertIn("1 skill checked, 0 errors, 1 warning", result.stdout)
+
+    def test_urls_anchors_and_absolute_paths_do_not_warn(self) -> None:
+        skill_dir = self.write_valid_skill(
+            "\n".join(
+                (
+                    "[site](https://example.com/scripts/guide.md)",
+                    "[anchor](#section)",
+                    "[absolute](/tmp/scripts/run.sh)",
+                    "`https://example.com/scripts/run.sh`",
+                    "`#section`",
+                    "`/tmp/scripts/run.sh`",
+                    "`C:\\scripts\\run.sh`",
+                )
+            )
+        )
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("warning reference.", result.stdout)
+        self.assertIn("1 skill checked, 0 errors, 0 warnings", result.stdout)
+
+    def test_body_at_line_and_token_limits_does_not_warn(self) -> None:
+        cases = {
+            "lines": "\n".join(f"Line {index}" for index in range(500)),
+            "tokens": "x" * 20_000,
+        }
+        for name, body in cases.items():
+            with self.subTest(limit=name):
+                skill_dir = self.write_valid_skill(body, name=name)
+
+                result = run_cli(str(skill_dir), cwd=self.root)
+
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertNotIn("warning body.", result.stdout)
+                self.assertIn("0 errors, 0 warnings", result.stdout)
+
+    def test_reference_one_level_below_root_does_not_warn(self) -> None:
+        skill_dir = self.write_valid_skill("Read [the guide](./references/guide.md#usage).")
+        reference = skill_dir / "references" / "guide.md"
+        reference.parent.mkdir(parents=True)
+        reference.write_text("# Guide\n", encoding="utf-8")
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("warning reference.", result.stdout)
+        self.assertIn("0 errors, 0 warnings", result.stdout)
 
     def test_unregistered_skill_exits_one_with_registration_rule(self) -> None:
         skill_dir = self.write_skill(

@@ -42,7 +42,7 @@ The consuming agent loads the entire body on activation. Keep it focused.
 Structure the skill so the agent reads only what the current task needs:
 
 1. **Metadata** — `name` and `description`, loaded for every skill at startup (about 100 tokens).
-2. **Instructions** — the full `SKILL.md` body, loaded on activation; keep it under 500 lines and 5,000 tokens.
+2. **Instructions** — the full `SKILL.md` body, loaded on activation; keep it to 500 lines and 5,000 tokens or fewer.
 3. **Resources** — files in `scripts/`, `references/`, or `assets/`, loaded only when needed.
 
 Move detailed material into `references/`. For each file, state its loading condition: "Read `references/api-errors.md` when the API returns a non-200 status."
