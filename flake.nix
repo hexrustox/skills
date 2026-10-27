@@ -29,15 +29,14 @@
             "-e"
             "NIX_PATH"
             "-v"
-            "xdg-bin:/root/.local/bin"
+            "xdg_bin:/root/.local/bin"
             "-v"
-            "xdg-data:/root/.local/share"
+            "uv_tool:/root/.local/share/uv/tools"
           ];
           wrappers = [
             "cargo"
-            "jq"
             "nixd"
-            "skillevaluator"
+            "uv"
           ];
         };
         container = pkgs.mkShellNoCC {
@@ -50,14 +49,14 @@
             })
 
             git
-            jq
             nixd
             nixfmt
             skills
             uv
+            python3
           ];
           shellHook = ''
-            export PATH="/root/.local/bin:$PATH"
+            export PATH="$HOME/.local/bin:$PATH"
           '';
         };
       };
