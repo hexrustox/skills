@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Sequence
 
 from validate_skill.model import SkillResult
-from validate_skill.validator import validate_skill
+from validate_skill.validator import ManifestCache, validate_skill
 
 
 class UsageError(Exception):
@@ -27,10 +27,7 @@ def _resolve_skill_file(path: Path) -> Path:
 def _print_result(result: SkillResult) -> None:
     print(f"skill: {result.path}")
     for finding in result.findings:
-        print(
-            f"  {finding.severity} {finding.rule}: {finding.message} "
-            f"[{finding.location}]"
-        )
+        print(finding.as_text())
 
 
 def _summary_counts(results: Sequence[SkillResult]) -> dict[str, int]:
@@ -56,26 +53,14 @@ def _print_summary(results: Sequence[SkillResult]) -> None:
 def _result_payload(result: SkillResult) -> dict[str, object]:
     return {
         "path": str(result.path),
-        "findings": [
-            {
-                "severity": finding.severity,
-                "rule": finding.rule,
-                "message": finding.message,
-                "location": finding.location,
-            }
-            for finding in result.findings
-        ],
+        "findings": [finding.as_dict() for finding in result.findings],
     }
-
-
-def _summary_payload(results: Sequence[SkillResult]) -> dict[str, int]:
-    return _summary_counts(results)
 
 
 def _print_json(results: Sequence[SkillResult]) -> None:
     payload = {
         "skills": [_result_payload(result) for result in results],
-        "summary": _summary_payload(results),
+        "summary": _summary_counts(results),
     }
     print(json.dumps(payload, indent=2))
 
@@ -92,10 +77,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     results: list[SkillResult] = []
     usage_failed = False
+    cache = ManifestCache()
     for path in args.path:
         try:
             skill_file = _resolve_skill_file(path)
-            result = validate_skill(skill_file)
+            result = validate_skill(skill_file, cache)
         except (UsageError, OSError, UnicodeDecodeError) as error:
             print(f"validate-skill: {error}", file=sys.stderr)
             usage_failed = True

@@ -16,6 +16,15 @@ def run_cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def valid_frontmatter(*, name: str = "example") -> str:
+    return (
+        f"name: {name}\n"
+        "description: Does an example task.\n"
+        "metadata:\n"
+        '  version: "1.0.0"\n'
+    )
+
+
 class CliTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._temp_dir = tempfile.TemporaryDirectory()
@@ -48,35 +57,40 @@ class CliTestCase(unittest.TestCase):
             self.write_manifest(entries, plugin_root=skill_dir.parent)
         return skill_dir
 
-    def write_valid_skill(
-        self, body: str, *, name: str = "example", base: Path | None = None
+    def write_document(
+        self,
+        body: str = "# Example",
+        *,
+        frontmatter: str | None = None,
+        name: str = "example",
+        base: Path | None = None,
+        register: bool = True,
     ) -> Path:
-        content = (
+        frontmatter_text = (
+            valid_frontmatter(name=name) if frontmatter is None else frontmatter
+        )
+        document = (
             "---\n"
-            f"name: {name}\n"
-            "description: Does an example task.\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
+            f"{textwrap.dedent(frontmatter_text).strip()}\n"
             "---\n\n"
             f"{body}\n"
         )
-        return self.write_skill(content, name=name, base=base)
+        return self.write_skill(document, name=name, base=base, register=register)
+
+    def assert_error(
+        self, result: subprocess.CompletedProcess[str], rule: str
+    ) -> None:
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(f"error {rule}", result.stdout)
+
+    def assert_warning(
+        self, result: subprocess.CompletedProcess[str], rule: str
+    ) -> None:
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"warning {rule}", result.stdout)
 
     def test_valid_skill_exits_zero_with_summary(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-
-            # Example
-
-            Follow these steps.
-            """
-        )
+        skill_dir = self.write_document("# Example\n\nFollow these steps.")
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
@@ -89,8 +103,7 @@ class CliTestCase(unittest.TestCase):
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error frontmatter.missing", result.stdout)
+        self.assert_error(result, "frontmatter.missing")
         self.assertIn("1 skill checked, 1 error, 0 warnings", result.stdout)
 
     def test_malformed_yaml_exits_one_with_frontmatter_rule(self) -> None:
@@ -106,8 +119,7 @@ class CliTestCase(unittest.TestCase):
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error frontmatter.malformed", result.stdout)
+        self.assert_error(result, "frontmatter.malformed")
 
     def test_non_mapping_frontmatter_exits_one_with_frontmatter_rule(self) -> None:
         skill_dir = self.write_skill(
@@ -123,98 +135,66 @@ class CliTestCase(unittest.TestCase):
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error frontmatter.not-mapping", result.stdout)
+        self.assert_error(result, "frontmatter.not-mapping")
 
     def test_missing_name_exits_one_with_name_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             description: Does an example task.
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error name.missing", result.stdout)
+        self.assert_error(result, "name.missing")
 
     def test_missing_description_exits_one_with_description_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error description.missing", result.stdout)
+        self.assert_error(result, "description.missing")
 
     def test_empty_name_and_description_exit_one_with_relevant_rules(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: "  "
             description: ""
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error name.empty", result.stdout)
+        self.assert_error(result, "name.empty")
         self.assertIn("error description.empty", result.stdout)
 
     def test_non_string_name_and_description_exit_one_with_relevant_rules(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: 123
             description: [not, text]
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error name.type", result.stdout)
+        self.assert_error(result, "name.type")
         self.assertIn("error description.type", result.stdout)
 
     def test_skill_file_path_is_accepted(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-
-            # Example
-            """
-        )
+        skill_dir = self.write_document("# Example")
 
         result = run_cli(str(skill_dir / "SKILL.md"), cwd=self.root)
 
@@ -222,14 +202,10 @@ class CliTestCase(unittest.TestCase):
         self.assertIn("0 errors", result.stdout)
 
     def test_findings_are_grouped_per_skill_before_summary(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
@@ -263,18 +239,7 @@ class CliTestCase(unittest.TestCase):
         self.assertIn("not a SKILL.md file or skill directory", result.stderr)
 
     def test_referenced_scripts_are_not_executed(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-
-            Run `scripts/mutate.sh`.
-            """
-        )
+        skill_dir = self.write_document("Run `scripts/mutate.sh`.")
         script = skill_dir / "scripts" / "mutate.sh"
         script.parent.mkdir()
         marker = self.root / "executed"
@@ -288,78 +253,59 @@ class CliTestCase(unittest.TestCase):
 
     def test_name_over_64_characters_exits_one_with_length_rule(self) -> None:
         long_name = "a" * 65
-        skill_dir = self.write_skill(
-            f"""\
-            ---
+        skill_dir = self.write_document(
+            frontmatter=f"""\
             name: {long_name}
             description: Does an example task.
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """,
             name=long_name,
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error name.length", result.stdout)
+        self.assert_error(result, "name.length")
 
     def test_name_with_invalid_grammar_exits_one_with_grammar_rule(self) -> None:
         for invalid_name in ("Example", "example_skill", "-example", "example-", "ex--ample"):
             with self.subTest(name=invalid_name):
-                skill_dir = self.write_skill(
-                    f"""\
-                    ---
+                skill_dir = self.write_document(
+                    frontmatter=f"""\
                     name: "{invalid_name}"
                     description: Does an example task.
                     metadata:
                       version: "1.0.0"
-                    ---
-
-                    # Example
                     """,
                     name=invalid_name,
                 )
 
                 result = run_cli(str(skill_dir), cwd=self.root)
 
-                self.assertEqual(result.returncode, 1)
-                self.assertIn("error name.grammar", result.stdout)
+                self.assert_error(result, "name.grammar")
 
     def test_name_not_matching_directory_exits_one_with_directory_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: other
             description: Does an example task.
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error name.directory", result.stdout)
+        self.assert_error(result, "name.directory")
 
     def test_name_and_description_at_maximum_length_exit_zero(self) -> None:
         max_name = "a" * 64
-        skill_dir = self.write_skill(
-            f"""\
-            ---
+        skill_dir = self.write_document(
+            frontmatter=f"""\
             name: {max_name}
             description: {"d" * 1024}
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """,
             name=max_name,
         )
@@ -369,28 +315,22 @@ class CliTestCase(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_description_over_1024_characters_exits_one_with_length_rule(self) -> None:
-        skill_dir = self.write_skill(
-            f"""\
-            ---
+        skill_dir = self.write_document(
+            frontmatter=f"""\
             name: example
             description: {"d" * 1025}
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error description.length", result.stdout)
+        self.assert_error(result, "description.length")
 
     def test_valid_optional_fields_exit_zero(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             disable-model-invocation: true
@@ -399,9 +339,6 @@ class CliTestCase(unittest.TestCase):
             metadata:
               version: "1.0.0"
             allowed-tools: Bash Read Write
-            ---
-
-            # Example
             """
         )
 
@@ -410,377 +347,276 @@ class CliTestCase(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_non_boolean_disable_model_invocation_exits_one_with_type_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             disable-model-invocation: "yes"
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error frontmatter.disable-model-invocation.type", result.stdout)
+        self.assert_error(result, "frontmatter.disable-model-invocation.type")
 
     def test_non_string_license_exits_one_with_type_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             license: 123
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error frontmatter.license.type", result.stdout)
+        self.assert_error(result, "frontmatter.license.type")
 
     def test_non_string_compatibility_exits_one_with_type_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             compatibility: [linux]
             metadata:
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error frontmatter.compatibility.type", result.stdout)
+        self.assert_error(result, "frontmatter.compatibility.type")
 
     def test_compatibility_outside_1_to_500_characters_exits_one_with_length_rule(self) -> None:
         for compatibility in ("", "c" * 501):
             with self.subTest(length=len(compatibility)):
                 name = f"example-{len(compatibility)}"
-                skill_dir = self.write_skill(
-                    f"""\
-                    ---
+                skill_dir = self.write_document(
+                    frontmatter=f"""\
                     name: {name}
                     description: Does an example task.
                     compatibility: "{compatibility}"
                     metadata:
                       version: "1.0.0"
-                    ---
-
-                    # Example
                     """,
                     name=name,
                 )
 
                 result = run_cli(str(skill_dir), cwd=self.root)
 
-                self.assertEqual(result.returncode, 1)
-                self.assertIn("error frontmatter.compatibility.length", result.stdout)
+                self.assert_error(result, "frontmatter.compatibility.length")
 
     def test_non_mapping_metadata_exits_one_with_type_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             metadata: [one]
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error metadata.type", result.stdout)
+        self.assert_error(result, "metadata.type")
 
     def test_non_string_metadata_value_exits_one_with_value_type_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             metadata:
               version: "1.0.0"
               owner: 5
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error metadata.value-type", result.stdout)
+        self.assert_error(result, "metadata.value-type")
 
     def test_malformed_allowed_tools_shape_exits_one_with_shape_rule(self) -> None:
         for index, allowed_tools in enumerate(("", "Bash\\nRead")):
             with self.subTest(allowed_tools=allowed_tools):
                 name = f"example-{index}"
-                skill_dir = self.write_skill(
-                    f"""\
-                    ---
+                skill_dir = self.write_document(
+                    frontmatter=f"""\
                     name: {name}
                     description: Does an example task.
                     metadata:
                       version: "1.0.0"
                     allowed-tools: "{allowed_tools}"
-                    ---
-
-                    # Example
                     """,
                     name=name,
                 )
 
                 result = run_cli(str(skill_dir), cwd=self.root)
 
-                self.assertEqual(result.returncode, 1)
-                self.assertIn("error frontmatter.allowed-tools.shape", result.stdout)
+                self.assert_error(result, "frontmatter.allowed-tools.shape")
 
     def test_non_string_allowed_tools_exits_one_with_type_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             metadata:
               version: "1.0.0"
             allowed-tools: [Bash]
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error frontmatter.allowed-tools.type", result.stdout)
+        self.assert_error(result, "frontmatter.allowed-tools.type")
 
     def test_missing_metadata_exits_one_with_version_missing_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error metadata.version.missing", result.stdout)
+        self.assert_error(result, "metadata.version.missing")
 
     def test_empty_metadata_mapping_exits_one_with_version_missing_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             metadata: {}
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error metadata.version.missing", result.stdout)
+        self.assert_error(result, "metadata.version.missing")
 
     def test_non_string_metadata_key_exits_one_with_key_type_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             metadata:
               1: one
               version: "1.0.0"
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error metadata.key-type", result.stdout)
+        self.assert_error(result, "metadata.key-type")
 
     def test_empty_metadata_version_exits_one_with_version_empty_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             metadata:
               version: "  "
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error metadata.version.empty", result.stdout)
+        self.assert_error(result, "metadata.version.empty")
 
     def test_non_string_metadata_version_exits_one_with_version_type_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             metadata:
               version: 1.0
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error metadata.version.type", result.stdout)
+        self.assert_error(result, "metadata.version.type")
 
     def test_extra_metadata_key_warns_and_exits_zero(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             metadata:
               version: "1.0.0"
               owner: team
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("warning metadata.extra-key", result.stdout)
+        self.assert_warning(result, "metadata.extra-key")
         self.assertIn("1 skill checked, 0 errors, 1 warning", result.stdout)
 
     def test_unknown_top_level_key_warns_and_exits_zero(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             metadata:
               version: "1.0.0"
             unknown: value
-            ---
-
-            # Example
             """
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("warning frontmatter.unknown-key", result.stdout)
+        self.assert_warning(result, "frontmatter.unknown-key")
         self.assertIn("1 skill checked, 0 errors, 1 warning", result.stdout)
 
     def test_empty_body_exits_one_with_body_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-            """
-        )
+        skill_dir = self.write_document(body="")
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error body.empty", result.stdout)
+        self.assert_error(result, "body.empty")
 
     def test_whitespace_only_body_exits_one_with_body_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-
-
-
-            """
-        )
+        skill_dir = self.write_document(body="\n\n")
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error body.empty", result.stdout)
+        self.assert_error(result, "body.empty")
 
     def test_body_over_500_lines_warns_and_exits_zero(self) -> None:
         body = "\n".join(f"Line {index}" for index in range(501))
-        skill_dir = self.write_valid_skill(body)
+        skill_dir = self.write_document(body)
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("warning body.lines", result.stdout)
+        self.assert_warning(result, "body.lines")
         self.assertIn("1 skill checked, 0 errors, 1 warning", result.stdout)
 
     def test_body_over_5000_estimated_tokens_warns_and_exits_zero(self) -> None:
         body = "x" * 20_001
-        skill_dir = self.write_valid_skill(body)
+        skill_dir = self.write_document(body)
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("warning body.tokens", result.stdout)
+        self.assert_warning(result, "body.tokens")
         self.assertIn("1 skill checked, 0 errors, 1 warning", result.stdout)
 
     def test_missing_local_references_warn_and_exit_zero(self) -> None:
-        skill_dir = self.write_valid_skill(
+        skill_dir = self.write_document(
             "See [the guide](references/guide.md), the logo in "
             "[assets](assets/logo.png), and run `scripts/run.sh`."
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("warning reference.missing", result.stdout)
+        self.assert_warning(result, "reference.missing")
         self.assertIn("1 skill checked, 0 errors, 3 warnings", result.stdout)
 
     def test_references_in_fenced_code_are_ignored(self) -> None:
-        skill_dir = self.write_valid_skill(
+        skill_dir = self.write_document(
             "```markdown\n"
             "See [the guide](references/missing.md) and run `scripts/missing.sh`.\n"
             "```"
@@ -793,29 +629,27 @@ class CliTestCase(unittest.TestCase):
         self.assertIn("0 errors, 0 warnings", result.stdout)
 
     def test_reference_style_link_is_checked(self) -> None:
-        skill_dir = self.write_valid_skill(
+        skill_dir = self.write_document(
             "See [the guide][guide].\n\n[guide]: references/missing.md"
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("warning reference.missing", result.stdout)
+        self.assert_warning(result, "reference.missing")
         self.assertIn("1 skill checked, 0 errors, 1 warning", result.stdout)
 
     def test_multiple_paths_in_one_code_span_are_checked(self) -> None:
-        skill_dir = self.write_valid_skill(
+        skill_dir = self.write_document(
             "Run `scripts/run.sh references/guide.md`."
         )
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("warning reference.missing", result.stdout)
+        self.assert_warning(result, "reference.missing")
         self.assertIn("1 skill checked, 0 errors, 2 warnings", result.stdout)
 
     def test_reference_with_parentheses_is_checked(self) -> None:
-        skill_dir = self.write_valid_skill("Read [the guide](references/guide_(v2).md).")
+        skill_dir = self.write_document("Read [the guide](references/guide_(v2).md).")
         reference = skill_dir / "references" / "guide_(v2).md"
         reference.parent.mkdir(parents=True)
         reference.write_text("# Guide\n", encoding="utf-8")
@@ -827,19 +661,18 @@ class CliTestCase(unittest.TestCase):
         self.assertIn("0 errors, 0 warnings", result.stdout)
 
     def test_reference_more_than_one_level_below_root_warns_and_exits_zero(self) -> None:
-        skill_dir = self.write_valid_skill("Run `scripts/deep/run.sh`.")
+        skill_dir = self.write_document("Run `scripts/deep/run.sh`.")
         script = skill_dir / "scripts" / "deep" / "run.sh"
         script.parent.mkdir(parents=True)
         script.write_text("#!/bin/sh\n", encoding="utf-8")
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("warning reference.too-deep", result.stdout)
+        self.assert_warning(result, "reference.too-deep")
         self.assertIn("1 skill checked, 0 errors, 1 warning", result.stdout)
 
     def test_urls_anchors_and_absolute_paths_do_not_warn(self) -> None:
-        skill_dir = self.write_valid_skill(
+        skill_dir = self.write_document(
             "\n".join(
                 (
                     "[site](https://example.com/scripts/guide.md)",
@@ -861,12 +694,12 @@ class CliTestCase(unittest.TestCase):
 
     def test_body_at_line_and_token_limits_does_not_warn(self) -> None:
         cases = {
-            "lines": "\n".join(f"Line {index}" for index in range(500)),
-            "tokens": "x" * 20_000,
+            "lines": "\n".join(f"Line {index}" for index in range(499)),
+            "tokens": "x" * 19_998,
         }
         for name, body in cases.items():
             with self.subTest(limit=name):
-                skill_dir = self.write_valid_skill(body, name=name)
+                skill_dir = self.write_document(body, name=name)
 
                 result = run_cli(str(skill_dir), cwd=self.root)
 
@@ -874,8 +707,24 @@ class CliTestCase(unittest.TestCase):
                 self.assertNotIn("warning body.", result.stdout)
                 self.assertIn("0 errors, 0 warnings", result.stdout)
 
+    def test_body_trailing_blank_lines_count_toward_line_limit(self) -> None:
+        body = "\n".join(f"Line {index}" for index in range(499)) + "\n\n"
+        skill_dir = self.write_document(body)
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assert_warning(result, "body.lines")
+
+    def test_body_token_estimate_counts_the_full_body(self) -> None:
+        body = "x" * 19_999
+        skill_dir = self.write_document(body)
+
+        result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assert_warning(result, "body.tokens")
+
     def test_reference_one_level_below_root_does_not_warn(self) -> None:
-        skill_dir = self.write_valid_skill("Read [the guide](./references/guide.md#usage).")
+        skill_dir = self.write_document("Read [the guide](./references/guide.md#usage).")
         reference = skill_dir / "references" / "guide.md"
         reference.parent.mkdir(parents=True)
         reference.write_text("# Guide\n", encoding="utf-8")
@@ -887,62 +736,27 @@ class CliTestCase(unittest.TestCase):
         self.assertIn("0 errors, 0 warnings", result.stdout)
 
     def test_unregistered_skill_exits_one_with_registration_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-
-            # Example
-            """,
-            register=False,
-        )
+        skill_dir = self.write_document("# Example", register=False)
         self.write_manifest(["./other"])
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error plugin.unregistered", result.stdout)
+        self.assert_error(result, "plugin.unregistered")
 
     def test_missing_plugin_manifest_exits_one_with_manifest_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-
-            # Example
-            """,
-            register=False,
-        )
+        skill_dir = self.write_document("# Example", register=False)
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error plugin.manifest-missing", result.stdout)
+        self.assert_error(result, "plugin.manifest-missing")
 
     def test_equivalent_manifest_path_spellings_register_the_skill(self) -> None:
         entries = ["./example", "example", "././example/", ".\\example"]
         for index, entry in enumerate(entries):
             with self.subTest(entry=entry):
                 base = self.root / f"case-{index}"
-                skill_dir = self.write_skill(
-                    """\
-                    ---
-                    name: example
-                    description: Does an example task.
-                    metadata:
-                      version: "1.0.0"
-                    ---
-
-                    # Example
-                    """,
+                skill_dir = self.write_document(
+                    "# Example",
                     base=base,
                     register=False,
                 )
@@ -955,17 +769,8 @@ class CliTestCase(unittest.TestCase):
 
     def test_nearest_plugin_manifest_governs_registration(self) -> None:
         nested = self.root / "nested"
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-
-            # Example
-            """,
+        skill_dir = self.write_document(
+            "# Example",
             base=nested,
             register=False,
         )
@@ -974,45 +779,22 @@ class CliTestCase(unittest.TestCase):
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error plugin.unregistered", result.stdout)
+        self.assert_error(result, "plugin.unregistered")
 
     def test_invalid_plugin_manifest_json_exits_one_with_manifest_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-
-            # Example
-            """,
-            register=False,
-        )
+        skill_dir = self.write_document("# Example", register=False)
         manifest = self.root / ".claude-plugin" / "plugin.json"
         manifest.parent.mkdir()
         manifest.write_text("{not json", encoding="utf-8")
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error plugin.manifest-invalid", result.stdout)
+        self.assert_error(result, "plugin.manifest-invalid")
 
     def test_registered_skill_reached_through_symlink_exits_zero(self) -> None:
         plugin_root = self.root / "plugin"
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-
-            # Example
-            """,
+        skill_dir = self.write_document(
+            "# Example",
             base=self.root / "targets",
             register=False,
         )
@@ -1025,31 +807,18 @@ class CliTestCase(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_plugin_manifest_without_skills_array_exits_one_with_manifest_rule(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
-            name: example
-            description: Does an example task.
-            metadata:
-              version: "1.0.0"
-            ---
-
-            # Example
-            """,
-            register=False,
-        )
+        skill_dir = self.write_document("# Example", register=False)
         manifest = self.root / ".claude-plugin" / "plugin.json"
         manifest.parent.mkdir()
         manifest.write_text(json.dumps({"skills": "example"}), encoding="utf-8")
 
         result = run_cli(str(skill_dir), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error plugin.manifest-invalid", result.stdout)
+        self.assert_error(result, "plugin.manifest-invalid")
 
     def test_multiple_paths_are_validated_in_one_run(self) -> None:
-        first = self.write_valid_skill("First skill.", name="first")
-        second = self.write_valid_skill("Second skill.", name="second")
+        first = self.write_document("First skill.", name="first")
+        second = self.write_document("Second skill.", name="second")
 
         result = run_cli(str(first), str(second), cwd=self.root)
 
@@ -1059,53 +828,43 @@ class CliTestCase(unittest.TestCase):
         self.assertIn("2 skills checked, 0 errors, 0 warnings", result.stdout)
 
     def test_validation_continues_after_an_earlier_path_fails(self) -> None:
-        failing = self.write_skill(
-            """\
-            ---
+        failing = self.write_document(
+            frontmatter="""\
             name: failing
             metadata:
               version: "1.0.0"
-            ---
-
-            # Failing
             """,
             name="failing",
         )
-        passing = self.write_valid_skill("Passing skill.", name="passing")
+        passing = self.write_document("Passing skill.", name="passing")
 
         result = run_cli(str(failing), str(passing), cwd=self.root)
 
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("error description.missing", result.stdout)
+        self.assert_error(result, "description.missing")
         self.assertIn(f"skill: {passing}", result.stdout)
         self.assertNotIn("error ", result.stdout.split(f"skill: {passing}", 1)[1])
         self.assertIn("2 skills checked, 1 error, 0 warnings", result.stdout)
 
     def test_multiple_paths_with_only_warnings_exit_zero(self) -> None:
-        first = self.write_skill(
-            """\
-            ---
+        first = self.write_document(
+            frontmatter="""\
             name: first
             description: Does an example task.
             metadata:
               version: "1.0.0"
             unknown: value
-            ---
-
-            First skill.
             """,
             name="first",
         )
-        second = self.write_valid_skill("Second skill.", name="second")
+        second = self.write_document("Second skill.", name="second")
 
         result = run_cli(str(first), str(second), cwd=self.root)
 
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("warning frontmatter.unknown-key", result.stdout)
+        self.assert_warning(result, "frontmatter.unknown-key")
         self.assertIn("2 skills checked, 0 errors, 1 warning", result.stdout)
 
     def test_nonexistent_path_in_a_batch_exits_two(self) -> None:
-        valid = self.write_valid_skill("Valid skill.")
+        valid = self.write_document("Valid skill.")
 
         result = run_cli(str(self.root / "missing"), str(valid), cwd=self.root)
 
@@ -1114,29 +873,21 @@ class CliTestCase(unittest.TestCase):
         self.assertIn(f"skill: {valid}", result.stdout)
 
     def test_json_output_contains_skills_findings_and_summary(self) -> None:
-        warning = self.write_skill(
-            """\
-            ---
+        warning = self.write_document(
+            frontmatter="""\
             name: warning
             description: Does an example task.
             metadata:
               version: "1.0.0"
               owner: team
-            ---
-
-            # Warning
             """,
             name="warning",
         )
-        failing = self.write_skill(
-            """\
-            ---
+        failing = self.write_document(
+            frontmatter="""\
             name: failing
             metadata:
               version: "1.0.0"
-            ---
-
-            # Failing
             """,
             name="failing",
         )
@@ -1175,30 +926,24 @@ class CliTestCase(unittest.TestCase):
         self.assertEqual(payload["skills"][1]["findings"][0]["rule"], "description.missing")
 
     def test_json_findings_match_text_findings(self) -> None:
-        warning = self.write_skill(
-            """\
-            ---
+        warning = self.write_document(
+            frontmatter="""\
             name: warning
             description: Does an example task.
             metadata:
               version: "1.0.0"
               owner: team
-            ---
-
-            Read `references/missing.md`.
             """,
+            body="Read `references/missing.md`.",
             name="warning",
         )
-        failing = self.write_skill(
-            """\
-            ---
+        failing = self.write_document(
+            frontmatter="""\
             name: failing
             description: Does an example task.
             metadata: {}
-            ---
-
-            # Failing
             """,
+            body="# Failing",
             name="failing",
         )
 
@@ -1225,18 +970,14 @@ class CliTestCase(unittest.TestCase):
                 )
 
     def test_json_output_for_warnings_only_exits_zero(self) -> None:
-        skill_dir = self.write_skill(
-            """\
-            ---
+        skill_dir = self.write_document(
+            frontmatter="""\
             name: example
             description: Does an example task.
             metadata:
               version: "1.0.0"
             unknown: value
-            ---
-
-            # Example
-            """,
+            """
         )
 
         result = run_cli(str(skill_dir), "--json", cwd=self.root)

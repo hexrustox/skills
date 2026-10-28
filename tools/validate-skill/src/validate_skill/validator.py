@@ -3,11 +3,12 @@ import math
 import os
 import posixpath
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 import yaml
 
-from validate_skill.model import Finding, SkillResult
+from validate_skill.model import Finding, Severity, SkillResult
 
 _NAME_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]*\]\(((?:[^()\n]|\([^()\n]*\))*)\)")
@@ -34,11 +35,19 @@ _KNOWN_FIELDS = frozenset(
 
 
 def _error(rule: str, message: str, location: str) -> Finding:
-    return Finding(rule=rule, severity="error", message=message, location=location)
+    return Finding(rule=rule, severity=Severity.ERROR, message=message, location=location)
 
 
 def _warning(rule: str, message: str, location: str) -> Finding:
-    return Finding(rule=rule, severity="warning", message=message, location=location)
+    return Finding(rule=rule, severity=Severity.WARNING, message=message, location=location)
+
+
+def _missing_version() -> Finding:
+    return _error(
+        "metadata.version.missing",
+        "metadata.version is required",
+        "metadata.version",
+    )
 
 
 def _parse_frontmatter(
@@ -96,21 +105,22 @@ def _parse_frontmatter(
     return data, body, []
 
 
-def _non_empty_string(frontmatter: dict[str, object], field: str) -> list[Finding]:
-    value = frontmatter.get(field)
+def _required_string(
+    frontmatter: dict[str, object], field: str
+) -> tuple[str | None, list[Finding]]:
     if field not in frontmatter:
-        return [_error(f"{field}.missing", f"{field} is required", field)]
+        return None, [_error(f"{field}.missing", f"{field} is required", field)]
+    value = frontmatter[field]
     if not isinstance(value, str):
-        return [_error(f"{field}.type", f"{field} must be a string", field)]
+        return None, [_error(f"{field}.type", f"{field} must be a string", field)]
     if not value.strip():
-        return [_error(f"{field}.empty", f"{field} must not be empty", field)]
-    return []
+        return None, [_error(f"{field}.empty", f"{field} must not be empty", field)]
+    return value, []
 
 
 def _check_name(frontmatter: dict[str, object], directory_name: str) -> list[Finding]:
-    findings = _non_empty_string(frontmatter, "name")
-    value = frontmatter.get("name")
-    if not isinstance(value, str) or not value.strip():
+    value, findings = _required_string(frontmatter, "name")
+    if value is None:
         return findings
     if not 1 <= len(value) <= 64:
         findings.append(_error("name.length", "name must be 1-64 characters", "name"))
@@ -135,9 +145,8 @@ def _check_name(frontmatter: dict[str, object], directory_name: str) -> list[Fin
 
 
 def _check_description(frontmatter: dict[str, object]) -> list[Finding]:
-    findings = _non_empty_string(frontmatter, "description")
-    value = frontmatter.get("description")
-    if not isinstance(value, str) or not value.strip():
+    value, findings = _required_string(frontmatter, "description")
+    if value is None:
         return findings
     if len(value) > 1024:
         findings.append(
@@ -210,16 +219,21 @@ def _check_optional_fields(frontmatter: dict[str, object]) -> list[Finding]:
     return findings
 
 
-def _check_metadata(frontmatter: dict[str, object]) -> list[Finding]:
-    findings: list[Finding] = []
-
+def _metadata_mapping(
+    frontmatter: dict[str, object],
+) -> tuple[Mapping[object, object] | None, list[Finding]]:
     if "metadata" not in frontmatter:
-        return [_error("metadata.version.missing", "metadata.version is required", "metadata.version")]
-
+        return None, [_missing_version()]
     metadata = frontmatter.get("metadata")
     if not isinstance(metadata, dict):
-        return [_error("metadata.type", "metadata must be a mapping of strings to strings", "metadata")]
+        return None, [
+            _error("metadata.type", "metadata must be a mapping of strings to strings", "metadata")
+        ]
+    return metadata, []
 
+
+def _check_metadata_entries(metadata: Mapping[object, object]) -> list[Finding]:
+    findings: list[Finding] = []
     for key, value in metadata.items():
         if not isinstance(key, str):
             findings.append(_error("metadata.key-type", "metadata keys must be strings", "metadata"))
@@ -232,30 +246,43 @@ def _check_metadata(frontmatter: dict[str, object]) -> list[Finding]:
                     f"metadata.{key}",
                 )
             )
+    return findings
 
+
+def _check_metadata_version(metadata: Mapping[object, object]) -> list[Finding]:
     if "version" not in metadata:
-        findings.append(_error("metadata.version.missing", "metadata.version is required", "metadata.version"))
-    else:
-        version = metadata.get("version")
-        if not isinstance(version, str):
-            findings.append(
-                _error("metadata.version.type", "metadata.version must be a string", "metadata.version")
-            )
-        elif not version.strip():
-            findings.append(
-                _error("metadata.version.empty", "metadata.version must not be empty", "metadata.version")
-            )
+        return [_missing_version()]
+    version = metadata.get("version")
+    if not isinstance(version, str):
+        return [
+            _error("metadata.version.type", "metadata.version must be a string", "metadata.version")
+        ]
+    if not version.strip():
+        return [
+            _error("metadata.version.empty", "metadata.version must not be empty", "metadata.version")
+        ]
+    return []
 
-    for key in metadata:
-        if isinstance(key, str) and key != "version":
-            findings.append(
-                _warning(
-                    "metadata.extra-key",
-                    f"metadata.{key} is not part of the repo convention; only version is expected",
-                    f"metadata.{key}",
-                )
-            )
 
+def _check_metadata_extra_keys(metadata: Mapping[object, object]) -> list[Finding]:
+    return [
+        _warning(
+            "metadata.extra-key",
+            f"metadata.{key} is not part of the repo convention; only version is expected",
+            f"metadata.{key}",
+        )
+        for key in metadata
+        if isinstance(key, str) and key != "version"
+    ]
+
+
+def _check_metadata(frontmatter: dict[str, object]) -> list[Finding]:
+    metadata, findings = _metadata_mapping(frontmatter)
+    if metadata is None:
+        return findings
+    findings.extend(_check_metadata_entries(metadata))
+    findings.extend(_check_metadata_version(metadata))
+    findings.extend(_check_metadata_extra_keys(metadata))
     return findings
 
 
@@ -289,12 +316,11 @@ def _strip_fenced_code(body: str) -> str:
 
 
 def _check_body(body: str) -> list[Finding]:
-    content = body.strip()
-    if not content:
+    if not body.strip():
         return [_error("body.empty", "SKILL.md body must not be empty", "body")]
 
     findings: list[Finding] = []
-    line_count = len(content.splitlines())
+    line_count = len(body.splitlines())
     if line_count > _MAX_BODY_LINES:
         findings.append(
             _warning(
@@ -304,7 +330,7 @@ def _check_body(body: str) -> list[Finding]:
             )
         )
 
-    token_estimate = math.ceil(len(content) / _CHARS_PER_TOKEN)
+    token_estimate = math.ceil(len(body) / _CHARS_PER_TOKEN)
     if token_estimate > _MAX_BODY_TOKENS:
         findings.append(
             _warning(
@@ -317,7 +343,7 @@ def _check_body(body: str) -> list[Finding]:
     return findings
 
 
-def _normalize_reference(target: str) -> str | None:
+def _reference_path(target: str) -> str | None:
     candidate = target.strip()
     if not candidate:
         return None
@@ -354,7 +380,7 @@ def _iter_references(body: str) -> list[tuple[str, int]]:
 
     for pattern in (_MARKDOWN_LINK_PATTERN, _MARKDOWN_REFERENCE_PATTERN):
         for match in pattern.finditer(scannable):
-            normalized = _normalize_reference(match.group(1))
+            normalized = _reference_path(match.group(1))
             if normalized is not None:
                 references.append(
                     (normalized, _line_number(body, match.start()))
@@ -362,7 +388,7 @@ def _iter_references(body: str) -> list[tuple[str, int]]:
 
     for match in _INLINE_CODE_PATTERN.finditer(scannable):
         for token in match.group(1).split():
-            normalized = _normalize_reference(token)
+            normalized = _reference_path(token)
             if normalized is not None:
                 references.append(
                     (normalized, _line_number(body, match.start()))
@@ -408,8 +434,9 @@ def _find_plugin_manifest(skill_dir: Path) -> Path | None:
     return None
 
 
-def _normalize_manifest_entry(entry: str) -> str:
-    return _normalize_path(entry)
+def _plugin_root(manifest: Path) -> Path:
+    plugin_directory = manifest.parent
+    return plugin_directory.parent
 
 
 def _load_manifest(manifest: Path) -> tuple[list[str] | None, Finding | None]:
@@ -440,7 +467,17 @@ def _load_manifest(manifest: Path) -> tuple[list[str] | None, Finding | None]:
     return data["skills"], None
 
 
-def _check_plugin_registration(skill_dir: Path) -> list[Finding]:
+class ManifestCache:
+    def __init__(self) -> None:
+        self._loaded: dict[Path, tuple[list[str] | None, Finding | None]] = {}
+
+    def load(self, manifest: Path) -> tuple[list[str] | None, Finding | None]:
+        if manifest not in self._loaded:
+            self._loaded[manifest] = _load_manifest(manifest)
+        return self._loaded[manifest]
+
+
+def _check_plugin_registration(skill_dir: Path, cache: ManifestCache) -> list[Finding]:
     manifest = _find_plugin_manifest(skill_dir)
     if manifest is None:
         return [
@@ -451,13 +488,12 @@ def _check_plugin_registration(skill_dir: Path) -> list[Finding]:
             )
         ]
 
-    entries, error = _load_manifest(manifest)
+    entries, error = cache.load(manifest)
     if error is not None:
         return [error]
 
-    plugin_root = manifest.parent.parent
-    relative = skill_dir.relative_to(plugin_root).as_posix()
-    registered = {_normalize_manifest_entry(entry) for entry in entries or []}
+    relative = skill_dir.relative_to(_plugin_root(manifest)).as_posix()
+    registered = {_normalize_path(entry) for entry in entries or []}
     if relative not in registered:
         return [
             _error(
@@ -469,7 +505,7 @@ def _check_plugin_registration(skill_dir: Path) -> list[Finding]:
     return []
 
 
-def validate_skill(path: Path) -> SkillResult:
+def validate_skill(path: Path, cache: ManifestCache | None = None) -> SkillResult:
     skill_file = Path(os.path.abspath(path))
     skill_dir = skill_file.parent
     result = SkillResult(path=path)
@@ -477,7 +513,7 @@ def validate_skill(path: Path) -> SkillResult:
 
     frontmatter, body, findings = _parse_frontmatter(text)
     result.findings.extend(findings)
-    result.findings.extend(_check_plugin_registration(skill_dir))
+    result.findings.extend(_check_plugin_registration(skill_dir, cache or ManifestCache()))
     if frontmatter is None:
         return result
 
