@@ -1,22 +1,15 @@
 import math
-import posixpath
 import re
 from collections.abc import Callable, Mapping
 
 import yaml
 
 from validate_skill.model import Finding, Severity
+from validate_skill.references import scan_references
 
 ReferenceExists = Callable[[str], bool]
 
 _NAME_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
-_MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]*\]\(((?:[^()\n]|\([^()\n]*\))*)\)")
-_MARKDOWN_REFERENCE_PATTERN = re.compile(
-    r"^[ \t]{0,3}\[[^\]]+\]:[ \t]*(<[^>]*>|\S+)", re.MULTILINE
-)
-_INLINE_CODE_PATTERN = re.compile(r"`([^`\n]+)`")
-_REFERENCE_DIRECTORIES = frozenset({"scripts", "references", "assets"})
-_URL_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 _MAX_BODY_LINES = 500
 _MAX_BODY_TOKENS = 5_000
 _CHARS_PER_TOKEN = 4
@@ -297,23 +290,6 @@ def _check_unknown_keys(frontmatter: dict[str, object]) -> list[Finding]:
     ]
 
 
-def _normalize_path(value: str) -> str:
-    return posixpath.normpath(value.replace("\\", "/"))
-
-
-def _strip_fenced_code(body: str) -> str:
-    lines = body.splitlines(keepends=True)
-    kept: list[str] = []
-    in_fence = False
-    for line in lines:
-        if line.lstrip().startswith(("```", "~~~")):
-            in_fence = not in_fence
-            kept.append("\n" if line.endswith("\n") else "")
-            continue
-        kept.append(("\n" if line.endswith("\n") else "") if in_fence else line)
-    return "".join(kept)
-
-
 def _check_body(body: str) -> list[Finding]:
     if not body.strip():
         return [_error("body.empty", "SKILL.md body must not be empty", "body")]
@@ -342,82 +318,28 @@ def _check_body(body: str) -> list[Finding]:
     return findings
 
 
-def _reference_path(target: str) -> str | None:
-    candidate = target.strip()
-    if not candidate:
-        return None
-    if candidate.startswith("<") and candidate.endswith(">"):
-        candidate = candidate[1:-1].strip()
-    else:
-        parts = candidate.split()
-        if not parts:
-            return None
-        candidate = parts[0]
-
-    candidate = candidate.split("#", 1)[0].split("?", 1)[0].strip()
-    if not candidate:
-        return None
-    if candidate.startswith(("#", "/", "~", "\\")):
-        return None
-    if _URL_SCHEME_PATTERN.match(candidate):
-        return None
-
-    normalized = _normalize_path(candidate)
-    first_part = normalized.split("/", 1)[0]
-    if first_part not in _REFERENCE_DIRECTORIES:
-        return None
-    return normalized
-
-
-def _line_number(body: str, offset: int) -> int:
-    return body.count("\n", 0, offset) + 1
-
-
-def _iter_references(body: str) -> list[tuple[str, int]]:
-    references: list[tuple[str, int]] = []
-    scannable = _strip_fenced_code(body)
-
-    for pattern in (_MARKDOWN_LINK_PATTERN, _MARKDOWN_REFERENCE_PATTERN):
-        for match in pattern.finditer(scannable):
-            normalized = _reference_path(match.group(1))
-            if normalized is not None:
-                references.append(
-                    (normalized, _line_number(body, match.start()))
-                )
-
-    for match in _INLINE_CODE_PATTERN.finditer(scannable):
-        for token in match.group(1).split():
-            normalized = _reference_path(token)
-            if normalized is not None:
-                references.append(
-                    (normalized, _line_number(body, match.start()))
-                )
-
-    return references
-
-
 def _check_references(body: str, reference_exists: ReferenceExists) -> list[Finding]:
     findings: list[Finding] = []
     seen: set[str] = set()
 
-    for normalized, line_number in _iter_references(body):
-        if normalized in seen:
+    for reference in scan_references(body):
+        if reference.path in seen:
             continue
-        seen.add(normalized)
-        location = f"body:{line_number}"
-        if len(normalized.split("/")) > 2:
+        seen.add(reference.path)
+        location = f"body:{reference.line}"
+        if len(reference.path.split("/")) > 2:
             findings.append(
                 _warning(
                     "reference.too-deep",
-                    f"reference '{normalized}' is more than one level below the skill root",
+                    f"reference '{reference.path}' is more than one level below the skill root",
                     location,
                 )
             )
-        if not reference_exists(normalized):
+        if not reference_exists(reference.path):
             findings.append(
                 _warning(
                     "reference.missing",
-                    f"referenced path '{normalized}' does not exist",
+                    f"referenced path '{reference.path}' does not exist",
                     location,
                 )
             )

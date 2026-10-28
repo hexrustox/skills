@@ -444,6 +444,13 @@ class DocumentTestCase(unittest.TestCase):
         self.assertEqual(findings[0].rule, "reference.missing")
         self.assertEqual(findings[0].location, "body:4")
 
+    def test_reference_location_after_fenced_code_counts_body_lines(self) -> None:
+        findings = validate(
+            build_document("```\nfenced\n```\n\nSee [x](references/a.md).")
+        )
+        self.assertEqual(findings[0].rule, "reference.missing")
+        self.assertEqual(findings[0].location, "body:6")
+
 
 if __name__ == "__main__":
     unittest.main()
