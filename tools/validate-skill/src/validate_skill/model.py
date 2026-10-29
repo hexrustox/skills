@@ -15,20 +15,6 @@ class Finding:
     message: str
     location: str
 
-    def as_text(self) -> str:
-        return (
-            f"  {self.severity.value} {self.rule}: {self.message} "
-            f"[{self.location}]"
-        )
-
-    def as_dict(self) -> dict[str, str]:
-        return {
-            "severity": self.severity.value,
-            "rule": self.rule,
-            "message": self.message,
-            "location": self.location,
-        }
-
 
 @dataclass
 class SkillResult:

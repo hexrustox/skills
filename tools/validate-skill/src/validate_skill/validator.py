@@ -92,12 +92,17 @@ def _check_plugin_registration(skill_dir: Path, cache: ManifestCache) -> list[Fi
     return []
 
 
-def validate_skill(path: Path, cache: ManifestCache | None = None) -> SkillResult:
+def validate_skill(
+    path: Path,
+    cache: ManifestCache | None = None,
+    *,
+    identity: Path | None = None,
+) -> SkillResult:
     skill_file = Path(os.path.abspath(path))
     skill_dir = skill_file.parent
     text = skill_file.read_text(encoding="utf-8")
 
-    result = SkillResult(path=path)
+    result = SkillResult(path=identity if identity is not None else path)
     result.findings.extend(
         validate_document(
             text,
