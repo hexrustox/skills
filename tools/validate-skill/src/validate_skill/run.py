@@ -2,24 +2,41 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
+from validate_skill.document import validate_document
 from validate_skill.model import Run, SkillResult, TargetFailure
 from validate_skill.plugin import PluginRegistry
-from validate_skill.validator import validate_skill
 
 
 class UsageError(Exception):
     pass
 
 
-def _resolve_skill_file(path: Path) -> Path:
-    if not path.exists():
-        raise UsageError(f"path does not exist: {path}")
-    skill_file = path / "SKILL.md" if path.is_dir() else path
+def _resolve_target(target: Path) -> tuple[Path, Path]:
+    if not target.exists():
+        raise UsageError(f"path does not exist: {target}")
+    skill_file = target / "SKILL.md" if target.is_dir() else target
     if not skill_file.is_file():
-        raise UsageError(f"path is not a SKILL.md file or skill directory: {path}")
+        raise UsageError(f"path is not a SKILL.md file or skill directory: {target}")
     if not os.access(skill_file, os.R_OK):
         raise UsageError(f"skill file is not readable: {skill_file}")
-    return skill_file
+    resolved = Path(os.path.abspath(skill_file))
+    return resolved, resolved.parent
+
+
+def _validate_target(target: Path, registry: PluginRegistry) -> SkillResult:
+    skill_file, skill_dir = _resolve_target(target)
+    text = skill_file.read_text(encoding="utf-8")
+
+    result = SkillResult(path=target)
+    result.findings.extend(
+        validate_document(
+            text,
+            skill_dir.name,
+            lambda candidate: (skill_dir / candidate).exists(),
+        )
+    )
+    result.findings.extend(registry.check(skill_dir))
+    return result
 
 
 def run_validation(targets: Sequence[Path]) -> Run:
@@ -29,8 +46,7 @@ def run_validation(targets: Sequence[Path]) -> Run:
 
     for target in targets:
         try:
-            skill_file = _resolve_skill_file(target)
-            result = validate_skill(skill_file, registry=registry, identity=target)
+            result = _validate_target(target, registry)
         except (UsageError, OSError, UnicodeDecodeError) as error:
             failures.append(TargetFailure(target, str(error)))
             continue

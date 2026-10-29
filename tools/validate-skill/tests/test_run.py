@@ -51,6 +51,51 @@ class RunTestCase(RepoTestCase):
             [["description.missing"], []],
         )
 
+    def test_registration_is_reported_when_frontmatter_is_missing(self) -> None:
+        skill_file = self.write_skill(
+            "# Example\n\nNo frontmatter here.\n", register=False
+        ) / "SKILL.md"
+
+        run = run_validation([skill_file])
+
+        self.assertEqual(run.failures, ())
+        self.assertEqual(
+            rules(run.results[0].findings),
+            ["frontmatter.missing", "plugin.manifest-missing"],
+        )
+
+    def test_document_and_registration_findings_combine(self) -> None:
+        skill_dir = self.write_document(
+            frontmatter="""\
+            name: example
+            metadata:
+              version: "1.0.0"
+            """,
+            register=False,
+        )
+        self.write_manifest(["./other"])
+
+        run = run_validation([skill_dir / "SKILL.md"])
+
+        self.assertEqual(
+            rules(run.results[0].findings),
+            ["description.missing", "plugin.unregistered"],
+        )
+
+    def test_reference_resolver_checks_the_skill_root(self) -> None:
+        skill_dir = self.write_document(
+            "Read [the guide](references/guide.md).",
+            register=False,
+        )
+        self.write_manifest(["./example"])
+        reference = skill_dir / "references" / "guide.md"
+        reference.parent.mkdir()
+        reference.write_text("# Guide\n", encoding="utf-8")
+
+        run = run_validation([skill_dir / "SKILL.md"])
+
+        self.assertEqual(run.results[0].findings, [])
+
 
 if __name__ == "__main__":
     unittest.main()
