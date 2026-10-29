@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import NewType
 
 
 class Severity(str, Enum):
@@ -8,12 +9,24 @@ class Severity(str, Enum):
     WARNING = "warning"
 
 
+Rule = NewType("Rule", str)
+Location = NewType("Location", str)
+
+
 @dataclass(frozen=True)
 class Finding:
-    rule: str
+    rule: Rule
     severity: Severity
     message: str
-    location: str
+    location: Location
+
+    @classmethod
+    def error(cls, rule: str, message: str, location: str) -> "Finding":
+        return cls(Rule(rule), Severity.ERROR, message, Location(location))
+
+    @classmethod
+    def warning(cls, rule: str, message: str, location: str) -> "Finding":
+        return cls(Rule(rule), Severity.WARNING, message, Location(location))
 
 
 @dataclass

@@ -1,1 +1,1 @@
-"""Validate SKILL.md frontmatter structure."""
+"""Validate SKILL.md structure, references, and plugin registration."""

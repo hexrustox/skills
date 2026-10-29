@@ -1,12 +1,8 @@
 import json
-import posixpath
 from pathlib import Path
 
-from validate_skill.model import Finding, Severity
-
-
-def _error(rule: str, message: str, location: str) -> Finding:
-    return Finding(rule=rule, severity=Severity.ERROR, message=message, location=location)
+from validate_skill.model import Finding
+from validate_skill.references import normalize_path
 
 
 def _find_manifest(skill_dir: Path) -> Path | None:
@@ -27,7 +23,7 @@ def _load_manifest(manifest: Path) -> tuple[list[str] | None, Finding | None]:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         return (
             None,
-            _error(
+            Finding.error(
                 "plugin.manifest-invalid",
                 f"could not parse {manifest}: {error}",
                 str(manifest),
@@ -40,7 +36,7 @@ def _load_manifest(manifest: Path) -> tuple[list[str] | None, Finding | None]:
     ):
         return (
             None,
-            _error(
+            Finding.error(
                 "plugin.manifest-invalid",
                 f"{manifest} must contain a 'skills' array of strings",
                 str(manifest),
@@ -62,7 +58,7 @@ class PluginRegistry:
         manifest = _find_manifest(skill_dir)
         if manifest is None:
             return [
-                _error(
+                Finding.error(
                     "plugin.manifest-missing",
                     f"no .claude-plugin/plugin.json found above {skill_dir}",
                     "plugin",
@@ -74,12 +70,10 @@ class PluginRegistry:
             return [error]
 
         relative = skill_dir.relative_to(_plugin_root(manifest)).as_posix()
-        registered = {
-            posixpath.normpath(entry.replace("\\", "/")) for entry in entries or []
-        }
+        registered = {normalize_path(entry) for entry in entries or []}
         if relative not in registered:
             return [
-                _error(
+                Finding.error(
                     "plugin.unregistered",
                     f"skill directory '{relative}' is not registered in {manifest}",
                     "plugin",

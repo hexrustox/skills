@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from validate_skill.model import Finding, Run, Severity, SkillResult, TargetFailure
+from validate_skill.model import Finding, Run, SkillResult, TargetFailure
 from validate_skill.report import render_json, render_text
 
 
@@ -12,17 +12,15 @@ def build_run() -> Run:
             SkillResult(
                 path=Path("first"),
                 findings=[
-                    Finding(
-                        rule="description.missing",
-                        severity=Severity.ERROR,
-                        message="description is required",
-                        location="description",
+                    Finding.error(
+                        "description.missing",
+                        "description is required",
+                        "description",
                     ),
-                    Finding(
-                        rule="metadata.extra-key",
-                        severity=Severity.WARNING,
-                        message="metadata.owner is not part of the repo convention",
-                        location="metadata.owner",
+                    Finding.warning(
+                        "metadata.extra-key",
+                        "metadata.owner is not part of the repo convention",
+                        "metadata.owner",
                     ),
                 ],
             ),

@@ -16,7 +16,7 @@ class Reference(NamedTuple):
     line: int
 
 
-def _normalize_path(value: str) -> str:
+def normalize_path(value: str) -> str:
     return posixpath.normpath(value.replace("\\", "/"))
 
 
@@ -40,7 +40,7 @@ def _reference_path(target: str) -> str | None:
     if _URL_SCHEME_PATTERN.match(candidate):
         return None
 
-    normalized = _normalize_path(candidate)
+    normalized = normalize_path(candidate)
     first_part = normalized.split("/", 1)[0]
     if first_part not in _REFERENCE_DIRECTORIES:
         return None

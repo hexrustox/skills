@@ -5,12 +5,9 @@ from validate_skill.model import Finding, Run, Severity, SkillResult, TargetFail
 
 
 def _finding(severity: Severity) -> Finding:
-    return Finding(
-        rule="example.rule",
-        severity=severity,
-        message="example message",
-        location="example",
-    )
+    if severity is Severity.ERROR:
+        return Finding.error("example.rule", "example message", "example")
+    return Finding.warning("example.rule", "example message", "example")
 
 
 class RunExitCodeTestCase(unittest.TestCase):
