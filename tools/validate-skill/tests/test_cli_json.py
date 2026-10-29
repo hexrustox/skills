@@ -29,7 +29,8 @@ class CliJsonTestCase(RepoTestCase):
 
         self.assertEqual(result.returncode, 1, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual(set(payload), {"skills", "summary"})
+        self.assertEqual(set(payload), {"skills", "failures", "summary"})
+        self.assertEqual(payload["failures"], [])
         self.assertEqual(payload["summary"], {"skills": 2, "errors": 1, "warnings": 1})
         self.assertEqual(
             [skill["path"] for skill in payload["skills"]],
@@ -127,6 +128,9 @@ class CliJsonTestCase(RepoTestCase):
         self.assertIn("does not exist", result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["skills"], [])
+        self.assertEqual(len(payload["failures"]), 1)
+        self.assertEqual(payload["failures"][0]["path"], str(self.root / "missing"))
+        self.assertIn("does not exist", payload["failures"][0]["message"])
         self.assertEqual(payload["summary"], {"skills": 0, "errors": 0, "warnings": 0})
 
 

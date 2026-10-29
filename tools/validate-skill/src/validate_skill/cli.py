@@ -29,9 +29,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if output:
             print(output)
 
-    if run.failures:
-        return 2
-    return 1 if any(result.error_count for result in run.results) else 0
+    return run.exit_code
 
 
 if __name__ == "__main__":

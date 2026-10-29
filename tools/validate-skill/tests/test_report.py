@@ -2,9 +2,8 @@ import json
 import unittest
 from pathlib import Path
 
-from validate_skill.model import Finding, Severity, SkillResult
+from validate_skill.model import Finding, Run, Severity, SkillResult, TargetFailure
 from validate_skill.report import render_json, render_text
-from validate_skill.run import Run
 
 
 def build_run() -> Run:
@@ -70,9 +69,24 @@ class ReportTestCase(unittest.TestCase):
                     },
                     {"path": "second", "findings": []},
                 ],
+                "failures": [],
                 "summary": {"skills": 2, "errors": 1, "warnings": 1},
             },
         )
+
+    def test_json_renders_target_failures_while_text_keeps_them_out(self) -> None:
+        run = Run(
+            results=(SkillResult(path=Path("second")),),
+            failures=(TargetFailure(Path("missing"), "path does not exist: missing"),),
+        )
+
+        payload = json.loads(render_json(run))
+
+        self.assertEqual(
+            payload["failures"],
+            [{"path": "missing", "message": "path does not exist: missing"}],
+        )
+        self.assertEqual(render_text(run), "skill: second\n1 skill checked, 0 errors, 0 warnings")
 
     def test_empty_run_renders_no_text_and_empty_json(self) -> None:
         empty = Run()
@@ -80,7 +94,11 @@ class ReportTestCase(unittest.TestCase):
         self.assertEqual(render_text(empty), "")
         self.assertEqual(
             json.loads(render_json(empty)),
-            {"skills": [], "summary": {"skills": 0, "errors": 0, "warnings": 0}},
+            {
+                "skills": [],
+                "failures": [],
+                "summary": {"skills": 0, "errors": 0, "warnings": 0},
+            },
         )
 
     def test_summary_uses_singular_forms(self) -> None:

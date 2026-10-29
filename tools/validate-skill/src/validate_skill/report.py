@@ -1,8 +1,7 @@
 import json
 from collections.abc import Sequence
 
-from validate_skill.model import Finding, SkillResult
-from validate_skill.run import Run
+from validate_skill.model import Finding, Run, SkillResult, TargetFailure
 
 
 def _finding_text(finding: Finding) -> str:
@@ -18,6 +17,13 @@ def _finding_dict(finding: Finding) -> dict[str, str]:
         "rule": finding.rule,
         "message": finding.message,
         "location": finding.location,
+    }
+
+
+def _failure_dict(failure: TargetFailure) -> dict[str, str]:
+    return {
+        "path": str(failure.path),
+        "message": failure.message,
     }
 
 
@@ -60,6 +66,7 @@ def render_json(run: Run) -> str:
             }
             for result in run.results
         ],
+        "failures": [_failure_dict(failure) for failure in run.failures],
         "summary": _summary_counts(run.results),
     }
     return json.dumps(payload, indent=2)

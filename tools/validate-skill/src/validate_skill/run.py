@@ -1,10 +1,10 @@
 import os
 from collections.abc import Sequence
-from dataclasses import dataclass, field
 from pathlib import Path
 
-from validate_skill.model import SkillResult
-from validate_skill.validator import ManifestCache, validate_skill
+from validate_skill.model import Run, SkillResult, TargetFailure
+from validate_skill.plugin import PluginRegistry
+from validate_skill.validator import validate_skill
 
 
 class UsageError(Exception):
@@ -22,27 +22,15 @@ def _resolve_skill_file(path: Path) -> Path:
     return skill_file
 
 
-@dataclass(frozen=True)
-class TargetFailure:
-    path: Path
-    message: str
-
-
-@dataclass(frozen=True)
-class Run:
-    results: tuple[SkillResult, ...] = field(default_factory=tuple)
-    failures: tuple[TargetFailure, ...] = field(default_factory=tuple)
-
-
 def run_validation(targets: Sequence[Path]) -> Run:
-    cache = ManifestCache()
+    registry = PluginRegistry()
     results: list[SkillResult] = []
     failures: list[TargetFailure] = []
 
     for target in targets:
         try:
             skill_file = _resolve_skill_file(target)
-            result = validate_skill(skill_file, cache, identity=target)
+            result = validate_skill(skill_file, registry=registry, identity=target)
         except (UsageError, OSError, UnicodeDecodeError) as error:
             failures.append(TargetFailure(target, str(error)))
             continue
