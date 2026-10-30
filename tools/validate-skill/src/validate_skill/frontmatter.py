@@ -17,9 +17,13 @@ def _required_string(
         return None, [Finding.error(f"{field}.missing", f"{field} is required", field)]
     value = frontmatter[field]
     if not isinstance(value, str):
-        return None, [Finding.error(f"{field}.type", f"{field} must be a string", field)]
+        return None, [
+            Finding.error(f"{field}.type", f"{field} must be a string", field)
+        ]
     if not value.strip():
-        return None, [Finding.error(f"{field}.empty", f"{field} must not be empty", field)]
+        return None, [
+            Finding.error(f"{field}.empty", f"{field} must not be empty", field)
+        ]
     return value, []
 
 
@@ -28,7 +32,9 @@ def _check_name(frontmatter: Frontmatter, directory_name: str) -> list[Finding]:
     if value is None:
         return findings
     if not 1 <= len(value) <= 64:
-        findings.append(Finding.error("name.length", "name must be 1-64 characters", "name"))
+        findings.append(
+            Finding.error("name.length", "name must be 1-64 characters", "name")
+        )
     if _NAME_PATTERN.fullmatch(value) is None:
         findings.append(
             Finding.error(
@@ -56,7 +62,9 @@ def _check_description(frontmatter: Frontmatter) -> list[Finding]:
     if len(value) > 1024:
         findings.append(
             Finding.error(
-                "description.length", "description must be 1-1024 characters", "description"
+                "description.length",
+                "description must be 1-1024 characters",
+                "description",
             )
         )
     return findings
@@ -71,7 +79,11 @@ def _check_string(
 ) -> list[Finding]:
     value = frontmatter[field]
     if not isinstance(value, str):
-        return [Finding.error(f"frontmatter.{field}.type", f"{field} must be a string", field)]
+        return [
+            Finding.error(
+                f"frontmatter.{field}.type", f"{field} must be a string", field
+            )
+        ]
     if (min_length is not None and len(value) < min_length) or (
         max_length is not None and len(value) > max_length
     ):
@@ -138,13 +150,19 @@ def parse_frontmatter(text: str) -> tuple[Frontmatter | None, str, list[Finding]
             "",
             [
                 Finding.error(
-                    "frontmatter.missing", "SKILL.md has no frontmatter block", "frontmatter"
+                    "frontmatter.missing",
+                    "SKILL.md has no frontmatter block",
+                    "frontmatter",
                 )
             ],
         )
 
     closing = next(
-        (index for index, line in enumerate(lines[1:], start=1) if line.strip() == "---"),
+        (
+            index
+            for index, line in enumerate(lines[1:], start=1)
+            if line.strip() == "---"
+        ),
         None,
     )
     if closing is None:

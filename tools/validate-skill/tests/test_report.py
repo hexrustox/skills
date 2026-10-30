@@ -144,9 +144,7 @@ class ReportTestCase(unittest.TestCase):
 
     def test_summary_uses_singular_forms(self) -> None:
         self.assertTrue(
-            render_text(build_run()).endswith(
-                "2 skills checked, 1 error, 1 warning"
-            )
+            render_text(build_run()).endswith("2 skills checked, 1 error, 1 warning")
         )
         verbose_single = Run(results=(SkillResult(path=Path("only")),))
         self.assertTrue(

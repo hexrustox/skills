@@ -13,6 +13,7 @@ from validate_skill.model import Finding
 def run_cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "validate_skill", *args],
+        check=False,
         cwd=cwd,
         capture_output=True,
         text=True,
@@ -39,7 +40,7 @@ def build_document(
         if frontmatter is None
         else textwrap.dedent(frontmatter).strip()
     )
-    return "---\n" f"{frontmatter_text}\n" "---\n\n" f"{body}\n"
+    return f"---\n{frontmatter_text}\n---\n\n{body}\n"
 
 
 def rules(findings: Iterable[Finding]) -> list[str]:
@@ -90,9 +91,7 @@ class RepoTestCase(unittest.TestCase):
         document = build_document(body, frontmatter=frontmatter, name=name)
         return self.write_skill(document, name=name, base=base, register=register)
 
-    def assert_error(
-        self, result: subprocess.CompletedProcess[str], rule: str
-    ) -> None:
+    def assert_error(self, result: subprocess.CompletedProcess[str], rule: str) -> None:
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn(f"error {rule}", result.stdout)
 

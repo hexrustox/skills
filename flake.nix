@@ -24,7 +24,7 @@
     {
       devShells.${system} = {
         default = capsule-lib.mkShell {
-          image = "alpine:latest";
+          image = "ubuntu:latest";
           extraOptions = [
             "-e"
             "NIX_PATH"

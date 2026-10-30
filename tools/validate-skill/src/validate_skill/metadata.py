@@ -29,7 +29,9 @@ def _metadata_mapping(
     if not isinstance(metadata, dict):
         return None, [
             Finding.error(
-                "metadata.type", "metadata must be a mapping of strings to strings", "metadata"
+                "metadata.type",
+                "metadata must be a mapping of strings to strings",
+                "metadata",
             )
         ]
     return metadata, []
@@ -40,7 +42,9 @@ def _check_metadata_entries(metadata: Mapping[object, object]) -> list[Finding]:
     for key, value in metadata.items():
         if not isinstance(key, str):
             findings.append(
-                Finding.error("metadata.key-type", "metadata keys must be strings", "metadata")
+                Finding.error(
+                    "metadata.key-type", "metadata keys must be strings", "metadata"
+                )
             )
             continue
         if key != "version" and not isinstance(value, str):

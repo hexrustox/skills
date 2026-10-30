@@ -1,7 +1,7 @@
 import argparse
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from validate_skill.report import render_json, render_text
 from validate_skill.run import run_validation

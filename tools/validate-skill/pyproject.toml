@@ -8,9 +8,6 @@ dependencies = ["PyYAML>=6.0"]
 [project.scripts]
 validate-skill = "validate_skill.cli:main"
 
-[dependency-groups]
-dev = ["mypy>=1.13", "types-PyYAML>=6.0"]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -57,7 +57,9 @@ class CliJsonTestCase(RepoTestCase):
                 }
             ],
         )
-        self.assertEqual(payload["skills"][1]["findings"][0]["rule"], "description.missing")
+        self.assertEqual(
+            payload["skills"][1]["findings"][0]["rule"], "description.missing"
+        )
 
     def test_json_findings_match_text_findings(self) -> None:
         warning = self.write_document(
@@ -90,9 +92,7 @@ class CliJsonTestCase(RepoTestCase):
             line.startswith(("  error ", "  warning "))
             for line in text_result.stdout.splitlines()
         )
-        json_finding_count = sum(
-            len(skill["findings"]) for skill in payload["skills"]
-        )
+        json_finding_count = sum(len(skill["findings"]) for skill in payload["skills"])
         self.assertEqual(json_finding_count, text_finding_count)
         self.assertIn("metadata.extra-key", text_result.stdout)
         for skill in payload["skills"]:

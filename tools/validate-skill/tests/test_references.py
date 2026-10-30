@@ -61,18 +61,10 @@ class ScanReferencesTestCase(unittest.TestCase):
         body = "[guide]: <references/guide.md>"
         self.assertEqual(scan_references(body), [Reference("references/guide.md", 1)])
 
-    def test_urls_anchors_absolute_paths_and_other_directories_are_ignored(self) -> None:
-        body = "\n".join(
-            (
-                "[site](https://example.com/scripts/guide.md)",
-                "[anchor](#section)",
-                "[absolute](/tmp/scripts/run.sh)",
-                "`https://example.com/scripts/run.sh`",
-                "`#section`",
-                "`/tmp/scripts/run.sh`",
-                "[other](docs/guide.md)",
-            )
-        )
+    def test_urls_anchors_absolute_paths_and_other_directories_are_ignored(
+        self,
+    ) -> None:
+        body = "[site](https://example.com/scripts/guide.md)\n[anchor](#section)\n[absolute](/tmp/scripts/run.sh)\n`https://example.com/scripts/run.sh`\n`#section`\n`/tmp/scripts/run.sh`\n[other](docs/guide.md)"
         self.assertEqual(scan_references(body), [])
 
 

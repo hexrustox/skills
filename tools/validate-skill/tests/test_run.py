@@ -11,14 +11,18 @@ class RunTestCase(RepoTestCase):
         run = run_validation([skill_dir, skill_dir / "SKILL.md"])
 
         self.assertEqual(run.failures, ())
-        self.assertEqual([result.path for result in run.results], [skill_dir, skill_dir / "SKILL.md"])
+        self.assertEqual(
+            [result.path for result in run.results], [skill_dir, skill_dir / "SKILL.md"]
+        )
 
     def test_validation_continues_after_a_target_fails(self) -> None:
         valid = self.write_document("# Example")
 
         run = run_validation([self.root / "missing", valid])
 
-        self.assertEqual([failure.path for failure in run.failures], [self.root / "missing"])
+        self.assertEqual(
+            [failure.path for failure in run.failures], [self.root / "missing"]
+        )
         self.assertIn("does not exist", run.failures[0].message)
         self.assertEqual([result.path for result in run.results], [valid])
         self.assertEqual(rules(run.results[0].findings), [])
@@ -52,9 +56,10 @@ class RunTestCase(RepoTestCase):
         )
 
     def test_registration_is_reported_when_frontmatter_is_missing(self) -> None:
-        skill_file = self.write_skill(
-            "# Example\n\nNo frontmatter here.\n", register=False
-        ) / "SKILL.md"
+        skill_file = (
+            self.write_skill("# Example\n\nNo frontmatter here.\n", register=False)
+            / "SKILL.md"
+        )
 
         run = run_validation([skill_file])
 

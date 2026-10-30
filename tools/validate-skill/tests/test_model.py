@@ -16,14 +16,18 @@ class RunExitCodeTestCase(unittest.TestCase):
 
     def test_warnings_only_exit_zero(self) -> None:
         run = Run(
-            results=(SkillResult(path=Path("skill"), findings=[_finding(Severity.WARNING)]),)
+            results=(
+                SkillResult(path=Path("skill"), findings=[_finding(Severity.WARNING)]),
+            )
         )
 
         self.assertEqual(run.exit_code, 0)
 
     def test_errors_exit_one(self) -> None:
         run = Run(
-            results=(SkillResult(path=Path("skill"), findings=[_finding(Severity.ERROR)]),)
+            results=(
+                SkillResult(path=Path("skill"), findings=[_finding(Severity.ERROR)]),
+            )
         )
 
         self.assertEqual(run.exit_code, 1)
@@ -35,7 +39,9 @@ class RunExitCodeTestCase(unittest.TestCase):
 
     def test_target_failures_take_precedence_over_errors(self) -> None:
         run = Run(
-            results=(SkillResult(path=Path("skill"), findings=[_finding(Severity.ERROR)]),),
+            results=(
+                SkillResult(path=Path("skill"), findings=[_finding(Severity.ERROR)]),
+            ),
             failures=(TargetFailure(Path("missing"), "does not exist"),),
         )
 

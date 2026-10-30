@@ -30,10 +30,14 @@ class DocumentTestCase(unittest.TestCase):
         )
 
     def test_valid_document_has_no_findings(self) -> None:
-        self.assert_document_rules(build_document("# Example\n\nFollow these steps."), [])
+        self.assert_document_rules(
+            build_document("# Example\n\nFollow these steps."), []
+        )
 
     def test_missing_frontmatter_reports_only_the_parse_rule(self) -> None:
-        self.assert_document_rules("# Example\n\nNo frontmatter here.\n", ["frontmatter.missing"])
+        self.assert_document_rules(
+            "# Example\n\nNo frontmatter here.\n", ["frontmatter.missing"]
+        )
 
     def test_malformed_yaml_reports_the_parse_rule(self) -> None:
         self.assert_document_rules(
@@ -42,7 +46,9 @@ class DocumentTestCase(unittest.TestCase):
         )
 
     def test_unclosed_frontmatter_reports_the_parse_rule(self) -> None:
-        self.assert_document_rules("---\nname: example\n\n# Example\n", ["frontmatter.malformed"])
+        self.assert_document_rules(
+            "---\nname: example\n\n# Example\n", ["frontmatter.malformed"]
+        )
 
     def test_non_mapping_frontmatter_reports_the_parse_rule(self) -> None:
         self.assert_document_rules(
@@ -52,11 +58,11 @@ class DocumentTestCase(unittest.TestCase):
 
     def test_missing_name_reports_name_missing(self) -> None:
         frontmatter = (
-            "description: Does an example task.\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
+            'description: Does an example task.\nmetadata:\n  version: "1.0.0"\n'
         )
-        self.assert_document_rules(build_document(frontmatter=frontmatter), ["name.missing"])
+        self.assert_document_rules(
+            build_document(frontmatter=frontmatter), ["name.missing"]
+        )
 
     def test_missing_description_reports_description_missing(self) -> None:
         frontmatter = 'name: example\nmetadata:\n  version: "1.0.0"\n'
@@ -66,24 +72,14 @@ class DocumentTestCase(unittest.TestCase):
         )
 
     def test_empty_name_and_description_report_empty_rules(self) -> None:
-        frontmatter = (
-            'name: ""\n'
-            'description: ""\n'
-            "metadata:\n"
-            '  version: "1.0.0"\n'
-        )
+        frontmatter = 'name: ""\ndescription: ""\nmetadata:\n  version: "1.0.0"\n'
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
             ["name.empty", "description.empty"],
         )
 
     def test_non_string_name_and_description_report_type_rules(self) -> None:
-        frontmatter = (
-            "name: 5\n"
-            "description: [text]\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
-        )
+        frontmatter = 'name: 5\ndescription: [text]\nmetadata:\n  version: "1.0.0"\n'
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
             ["name.type", "description.type"],
@@ -92,13 +88,21 @@ class DocumentTestCase(unittest.TestCase):
     def test_name_over_64_characters_reports_length(self) -> None:
         long_name = "a" * 65
         self.assert_document_rules(
-            build_document(frontmatter=valid_frontmatter(name=long_name), name=long_name),
+            build_document(
+                frontmatter=valid_frontmatter(name=long_name), name=long_name
+            ),
             ["name.length"],
             directory_name=long_name,
         )
 
     def test_invalid_name_grammar_reports_grammar(self) -> None:
-        for invalid_name in ("Example", "example_skill", "-example", "example-", "ex--ample"):
+        for invalid_name in (
+            "Example",
+            "example_skill",
+            "-example",
+            "example-",
+            "ex--ample",
+        ):
             with self.subTest(name=invalid_name):
                 self.assert_document_rules(
                     build_document(
@@ -132,10 +136,7 @@ class DocumentTestCase(unittest.TestCase):
 
     def test_description_over_1024_characters_reports_length(self) -> None:
         frontmatter = (
-            "name: example\n"
-            f"description: {'d' * 1025}\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
+            f'name: example\ndescription: {"d" * 1025}\nmetadata:\n  version: "1.0.0"\n'
         )
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
@@ -210,9 +211,7 @@ class DocumentTestCase(unittest.TestCase):
 
     def test_non_mapping_metadata_reports_type(self) -> None:
         frontmatter = (
-            "name: example\n"
-            "description: Does an example task.\n"
-            "metadata: [one]\n"
+            "name: example\ndescription: Does an example task.\nmetadata: [one]\n"
         )
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
@@ -255,7 +254,9 @@ class DocumentTestCase(unittest.TestCase):
         )
 
     def test_empty_metadata_mapping_reports_version_missing(self) -> None:
-        frontmatter = "name: example\ndescription: Does an example task.\nmetadata: {}\n"
+        frontmatter = (
+            "name: example\ndescription: Does an example task.\nmetadata: {}\n"
+        )
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
             ["metadata.version.missing"],
@@ -423,16 +424,7 @@ class DocumentTestCase(unittest.TestCase):
         )
 
     def test_urls_anchors_and_absolute_paths_do_not_warn(self) -> None:
-        body = "\n".join(
-            (
-                "[site](https://example.com/scripts/guide.md)",
-                "[anchor](#section)",
-                "[absolute](/tmp/scripts/run.sh)",
-                "`https://example.com/scripts/run.sh`",
-                "`#section`",
-                "`/tmp/scripts/run.sh`",
-            )
-        )
+        body = "[site](https://example.com/scripts/guide.md)\n[anchor](#section)\n[absolute](/tmp/scripts/run.sh)\n`https://example.com/scripts/run.sh`\n`#section`\n`/tmp/scripts/run.sh`"
         self.assert_document_rules(build_document(body), [])
 
     def test_body_at_line_and_token_limits_does_not_warn(self) -> None:
@@ -459,16 +451,11 @@ class DocumentTestCase(unittest.TestCase):
         )
 
     def test_duplicate_references_are_reported_once(self) -> None:
-        body = (
-            "Read [a](references/a.md) and "
-            "[a again](references/a.md)."
-        )
+        body = "Read [a](references/a.md) and [a again](references/a.md)."
         self.assert_document_rules(build_document(body), ["reference.missing"])
 
     def test_reference_location_counts_body_lines(self) -> None:
-        findings = validate(
-            build_document("# Example\n\nSee [x](references/a.md).")
-        )
+        findings = validate(build_document("# Example\n\nSee [x](references/a.md)."))
         self.assertEqual(findings[0].rule, "reference.missing")
         self.assertEqual(findings[0].location, "body:4")
 
