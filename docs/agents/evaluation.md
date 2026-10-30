@@ -2,19 +2,9 @@
 
 Evaluation answers one question: does loading this skill improve an agent's output enough to justify the extra context it costs? A single plausible output does not answer it. This procedure produces evidence: paired runs with and without the skill, graded against assertions, then reviewed by a human for what assertions cannot capture.
 
-Run the static gate first. The loop below measures behavior; it does not replace format and security checks.
+The loop below measures behavior; it does not replace format and security checks.
 
-## 1. Gate on static checks
-
-```bash
-skillevaluator tier1 skills/<path> --checks schema,unicode,quality,version -r markdown -o .eval/<skill>/tier1
-```
-
-Fix every blocking finding and rerun. A skill that fails the gate is not ready for behavioral evaluation.
-
-The `Author not specified in metadata` finding from `skillevaluator` is accepted in this repo; treat it as non-blocking and do not add an `author` key just to silence it.
-
-## 2. Write test cases
+## 1. Write test cases
 
 Create `.eval/<skill>/evals.json`. Start with two or three cases: enough to expose a pattern, small enough to iterate on.
 
@@ -36,7 +26,7 @@ Write prompts that sound like users: file paths, column names, context, casual p
 
 `expected_output` describes success for the reviewer. Assertions are the gradable claims and come after the first run. List input files relative to `.eval/<skill>` and copy them into the run's working directory.
 
-## 3. Run each case twice
+## 2. Run each case twice
 
 Store the test cases and artifacts under `.eval/<skill>/`:
 
@@ -63,7 +53,7 @@ For a new skill, the baseline is no skill. For a revision, snapshot the skill be
 
 Keep the transcript when the client provides one. Read the transcripts before grading. The with-skill run must show `SKILL.md` being loaded; the baseline must show no such load. If the baseline picked the skill up from the environment, run it from a clean directory or disable the skill, then rerun.
 
-## 4. Grade the outputs
+## 3. Grade the outputs
 
 After the first with-skill run, look at the outputs and add assertions to each case. A good assertion is observable from the artifacts alone:
 
@@ -87,7 +77,7 @@ Grade every assertion PASS or FAIL with evidence: the file, value, or quoted lin
 
 Review the assertions while grading. One that passes in both configurations measures the base model, not the skill. One that fails in both may be unverifiable or too strict. One that flips between runs is flaky. Fix the assertion or the case for the next iteration.
 
-## 5. Aggregate and read the pattern
+## 4. Aggregate and read the pattern
 
 Write `benchmark.json` with pass rate per configuration, plus the lift:
 
@@ -108,7 +98,7 @@ With one run per case, report raw counts and lift; standard deviation needs repe
 - **Passes only with the skill:** this is the skill's contribution. Name the instructions responsible.
 - **Flaky:** rerun the case three times. Persistent variance points to ambiguous instructions or a flaky test, not a bad skill.
 
-## 6. Get human review
+## 5. Get human review
 
 Assertions only test what you thought to assert. Before changing the skill, give the reviewer a compact packet: the prompt, both outputs, the grades, transcript paths, and your specific doubts. Ask about concrete qualities ("What is missing from this report?") rather than general impressions. Record the answer in `feedback.json`, keyed by eval id; an empty string means the case was acceptable.
 
@@ -118,9 +108,9 @@ Assertions only test what you thought to assert. Before changing the skill, give
 
 Wait for the review before iterating. If no reviewer is available, mark the iteration provisional and say so in the final report.
 
-## 7. Iterate
+## 6. Iterate
 
-Start `iteration-N+1`. Give a fresh LLM the failed assertions, `feedback.json`, the transcripts, and the current `SKILL.md`, and ask for changes that generalize. Apply them, rerun `skillevaluator tier1`, and rerun every case. When two versions are close, grade blind: present outputs labeled A and B without saying which skill produced them.
+Start `iteration-N+1`. Give a fresh LLM the failed assertions, `feedback.json`, the transcripts, and the current `SKILL.md`, and ask for changes that generalize. Apply them and rerun every case. When two versions are close, grade blind: present outputs labeled A and B without saying which skill produced them.
 
 Guidelines for the changes:
 
@@ -135,7 +125,6 @@ Stop when all assertions pass and feedback is empty, or when two consecutive ite
 
 An evaluation is done when:
 
-- `skillevaluator tier1` passes.
 - The eval suite (`.eval/<skill>/evals.json` and its input files) and iteration artifacts are under `.eval/<skill>/`.
 - Every case ran with and without the skill (or the old skill) in fresh contexts.
 - Transcripts confirm the skill loaded only in the with-skill runs.
