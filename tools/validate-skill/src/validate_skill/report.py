@@ -47,12 +47,15 @@ def _summary_text(results: Sequence[SkillResult]) -> str:
     )
 
 
-def render_text(run: Run) -> str:
+def render_text(run: Run, *, verbose: bool = False) -> str:
     lines: list[str] = []
     for result in run.results:
+        if not verbose and not result.findings:
+            continue
         lines.append(f"skill: {result.path}")
         lines.extend(_finding_text(finding) for finding in result.findings)
-    if run.results:
+
+    if verbose or any(result.findings for result in run.results):
         lines.append(_summary_text(run.results))
     return "\n".join(lines)
 

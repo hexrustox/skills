@@ -15,17 +15,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--json", action="store_true", help="emit machine-readable findings"
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="list every checked skill and always print the summary",
+    )
     args = parser.parse_args(argv)
 
     run = run_validation(args.path)
 
-    for failure in run.failures:
-        print(f"validate-skill: {failure.message}", file=sys.stderr)
-
     if args.json:
         print(render_json(run))
     else:
-        output = render_text(run)
+        for failure in run.failures:
+            print(f"error: {failure.message}", file=sys.stderr)
+        output = render_text(run, verbose=args.verbose)
         if output:
             print(output)
 

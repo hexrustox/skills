@@ -125,7 +125,7 @@ class CliJsonTestCase(RepoTestCase):
         result = run_cli("--json", str(self.root / "missing"), cwd=self.root)
 
         self.assertEqual(result.returncode, 2)
-        self.assertIn("does not exist", result.stderr)
+        self.assertEqual(result.stderr, "")
         payload = json.loads(result.stdout)
         self.assertEqual(payload["skills"], [])
         self.assertEqual(len(payload["failures"]), 1)

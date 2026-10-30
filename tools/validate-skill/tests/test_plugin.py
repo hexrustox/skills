@@ -22,7 +22,7 @@ class PluginRegistryTestCase(RepoTestCase):
         self.assertEqual(rules(findings), ["plugin.manifest-missing"])
 
     def test_equivalent_manifest_path_spellings_register_the_skill(self) -> None:
-        entries = ["./example", "example", "././example/", ".\\example"]
+        entries = ["./example", "example", "././example/"]
         for index, entry in enumerate(entries):
             with self.subTest(entry=entry):
                 base = self.root / f"case-{index}"

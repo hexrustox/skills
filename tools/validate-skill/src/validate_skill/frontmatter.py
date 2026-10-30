@@ -105,25 +105,15 @@ def _check_compatibility(frontmatter: Frontmatter) -> list[Finding]:
     return _check_string(frontmatter, "compatibility", min_length=1, max_length=500)
 
 
-def _check_allowed_tools(frontmatter: Frontmatter) -> list[Finding]:
-    allowed_tools = frontmatter["allowed-tools"]
-    if not isinstance(allowed_tools, str):
-        return [
-            Finding.error(
-                "frontmatter.allowed-tools.type",
-                "allowed-tools must be a space-separated string",
-                "allowed-tools",
-            )
-        ]
-    if not allowed_tools.strip() or "\n" in allowed_tools:
-        return [
-            Finding.error(
-                "frontmatter.allowed-tools.shape",
-                "allowed-tools must be a non-empty space-separated string",
-                "allowed-tools",
-            )
-        ]
-    return []
+def _warn_allowed_tools(_frontmatter: Frontmatter) -> list[Finding]:
+    return [
+        Finding.warning(
+            "frontmatter.allowed-tools.experimental",
+            "allowed-tools is experimental and implementation-dependent; "
+            "its value is not validated",
+            "allowed-tools",
+        )
+    ]
 
 
 FieldCheck = Callable[[Frontmatter], list[Finding]]
@@ -132,7 +122,7 @@ _OPTIONAL_FIELDS: tuple[tuple[str, FieldCheck], ...] = (
     ("disable-model-invocation", _check_disable_model_invocation),
     ("license", _check_license),
     ("compatibility", _check_compatibility),
-    ("allowed-tools", _check_allowed_tools),
+    ("allowed-tools", _warn_allowed_tools),
 )
 
 _KNOWN_FIELDS = frozenset(

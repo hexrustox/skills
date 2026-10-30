@@ -17,7 +17,7 @@ class Reference(NamedTuple):
 
 
 def normalize_path(value: str) -> str:
-    return posixpath.normpath(value.replace("\\", "/"))
+    return posixpath.normpath(value)
 
 
 def _reference_path(target: str) -> str | None:
@@ -35,7 +35,7 @@ def _reference_path(target: str) -> str | None:
     candidate = candidate.split("#", 1)[0].split("?", 1)[0].strip()
     if not candidate:
         return None
-    if candidate.startswith(("#", "/", "~", "\\")):
+    if candidate.startswith(("#", "/", "~")):
         return None
     if _URL_SCHEME_PATTERN.match(candidate):
         return None

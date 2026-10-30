@@ -4,10 +4,18 @@ from support import RepoTestCase, run_cli
 
 
 class CliTestCase(RepoTestCase):
-    def test_valid_skill_exits_zero_with_summary(self) -> None:
+    def test_valid_skill_exits_zero_quietly(self) -> None:
         skill_dir = self.write_document("# Example\n\nFollow these steps.")
 
         result = run_cli(str(skill_dir), cwd=self.root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_verbose_lists_valid_skill_and_summary(self) -> None:
+        skill_dir = self.write_document("# Example\n\nFollow these steps.")
+
+        result = run_cli("--verbose", str(skill_dir), cwd=self.root)
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"skill: {skill_dir}", result.stdout)
@@ -27,7 +35,7 @@ class CliTestCase(RepoTestCase):
         result = run_cli(str(skill_dir / "SKILL.md"), cwd=self.root)
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("0 errors", result.stdout)
+        self.assertEqual(result.stdout, "")
 
     def test_findings_are_grouped_per_skill_before_summary(self) -> None:
         skill_dir = self.write_document(
@@ -94,7 +102,7 @@ class CliTestCase(RepoTestCase):
         first = self.write_document("First skill.", name="first")
         second = self.write_document("Second skill.", name="second")
 
-        result = run_cli(str(first), str(second), cwd=self.root)
+        result = run_cli("--verbose", str(first), str(second), cwd=self.root)
 
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn(f"skill: {first}", result.stdout)
@@ -115,8 +123,7 @@ class CliTestCase(RepoTestCase):
         result = run_cli(str(failing), str(passing), cwd=self.root)
 
         self.assert_error(result, "description.missing")
-        self.assertIn(f"skill: {passing}", result.stdout)
-        self.assertNotIn("error ", result.stdout.split(f"skill: {passing}", 1)[1])
+        self.assertNotIn(f"skill: {passing}", result.stdout)
         self.assertIn("2 skills checked, 1 error, 0 warnings", result.stdout)
 
     def test_multiple_paths_with_only_warnings_exit_zero(self) -> None:
@@ -136,6 +143,7 @@ class CliTestCase(RepoTestCase):
 
         self.assert_warning(result, "frontmatter.unknown-key")
         self.assertIn("2 skills checked, 0 errors, 1 warning", result.stdout)
+        self.assertNotIn(f"skill: {second}", result.stdout)
 
     def test_nonexistent_path_in_a_batch_exits_two(self) -> None:
         valid = self.write_document("Valid skill.")
@@ -144,7 +152,7 @@ class CliTestCase(RepoTestCase):
 
         self.assertEqual(result.returncode, 2)
         self.assertIn("does not exist", result.stderr)
-        self.assertIn(f"skill: {valid}", result.stdout)
+        self.assertEqual(result.stdout, "")
 
 
 if __name__ == "__main__":

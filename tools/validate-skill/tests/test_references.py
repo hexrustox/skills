@@ -54,7 +54,7 @@ class ScanReferencesTestCase(unittest.TestCase):
         self.assertEqual(scan_references(body), [Reference("references/guide.md", 5)])
 
     def test_paths_are_normalized_and_stripped_of_fragments(self) -> None:
-        body = "See [the guide](references\\guide.md#usage)."
+        body = "See [the guide](./references/guide.md#usage)."
         self.assertEqual(scan_references(body), [Reference("references/guide.md", 1)])
 
     def test_angle_bracket_reference_is_scanned(self) -> None:
@@ -70,7 +70,6 @@ class ScanReferencesTestCase(unittest.TestCase):
                 "`https://example.com/scripts/run.sh`",
                 "`#section`",
                 "`/tmp/scripts/run.sh`",
-                "`C:\\scripts\\run.sh`",
                 "[other](docs/guide.md)",
             )
         )

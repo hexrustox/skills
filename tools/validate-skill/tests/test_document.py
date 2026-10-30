@@ -151,7 +151,6 @@ class DocumentTestCase(unittest.TestCase):
             "compatibility: Requires Python 3.11 or newer.\n"
             "metadata:\n"
             '  version: "1.0.0"\n'
-            "allowed-tools: Bash Read Write\n"
         )
         self.assert_document_rules(build_document(frontmatter=frontmatter), [])
 
@@ -233,33 +232,20 @@ class DocumentTestCase(unittest.TestCase):
             ["metadata.value-type", "metadata.extra-key"],
         )
 
-    def test_malformed_allowed_tools_shape_reports_shape(self) -> None:
-        for allowed_tools in ("", "Bash\\nRead"):
+    def test_allowed_tools_warns_without_validating_its_value(self) -> None:
+        for allowed_tools in ("Bash Read", "", "[Bash]"):
             with self.subTest(allowed_tools=allowed_tools):
                 frontmatter = (
                     "name: example\n"
                     "description: Does an example task.\n"
                     "metadata:\n"
                     '  version: "1.0.0"\n'
-                    f'allowed-tools: "{allowed_tools}"\n'
+                    f"allowed-tools: {allowed_tools}\n"
                 )
                 self.assert_document_rules(
                     build_document(frontmatter=frontmatter),
-                    ["frontmatter.allowed-tools.shape"],
+                    ["frontmatter.allowed-tools.experimental"],
                 )
-
-    def test_non_string_allowed_tools_reports_type(self) -> None:
-        frontmatter = (
-            "name: example\n"
-            "description: Does an example task.\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
-            "allowed-tools: [Bash]\n"
-        )
-        self.assert_document_rules(
-            build_document(frontmatter=frontmatter),
-            ["frontmatter.allowed-tools.type"],
-        )
 
     def test_missing_metadata_reports_version_missing(self) -> None:
         frontmatter = "name: example\ndescription: Does an example task.\n"
@@ -311,6 +297,49 @@ class DocumentTestCase(unittest.TestCase):
             build_document(frontmatter=frontmatter),
             ["metadata.version.type"],
         )
+
+    def test_valid_semver_metadata_versions_pass(self) -> None:
+        for version in (
+            "1.0.0",
+            "0.1.0",
+            "10.20.30",
+            "1.0.0-alpha.1",
+            "1.0.0+build.5",
+            "1.0.0-rc.1+build.5",
+        ):
+            with self.subTest(version=version):
+                frontmatter = (
+                    "name: example\n"
+                    "description: Does an example task.\n"
+                    "metadata:\n"
+                    f'  version: "{version}"\n'
+                )
+                self.assert_document_rules(
+                    build_document(frontmatter=frontmatter),
+                    [],
+                )
+
+    def test_invalid_semver_metadata_versions_report_semver(self) -> None:
+        for version in (
+            "1.0",
+            "v1.0.0",
+            "01.0.0",
+            "1.0.0.0",
+            "1.0.0-",
+            "1.0.0-alpha..1",
+            "1.0.0-01",
+        ):
+            with self.subTest(version=version):
+                frontmatter = (
+                    "name: example\n"
+                    "description: Does an example task.\n"
+                    "metadata:\n"
+                    f'  version: "{version}"\n'
+                )
+                self.assert_document_rules(
+                    build_document(frontmatter=frontmatter),
+                    ["metadata.version.semver"],
+                )
 
     def test_extra_metadata_key_warns(self) -> None:
         frontmatter = (
@@ -402,7 +431,6 @@ class DocumentTestCase(unittest.TestCase):
                 "`https://example.com/scripts/run.sh`",
                 "`#section`",
                 "`/tmp/scripts/run.sh`",
-                "`C:\\scripts\\run.sh`",
             )
         )
         self.assert_document_rules(build_document(body), [])

@@ -30,9 +30,19 @@ def build_run() -> Run:
 
 
 class ReportTestCase(unittest.TestCase):
-    def test_text_groups_findings_per_skill_and_summarizes(self) -> None:
+    def test_text_lists_only_skills_with_findings_and_summarizes_errors(self) -> None:
         self.assertEqual(
             render_text(build_run()),
+            "skill: first\n"
+            "  error description.missing: description is required [description]\n"
+            "  warning metadata.extra-key: metadata.owner is not part of the repo "
+            "convention [metadata.owner]\n"
+            "2 skills checked, 1 error, 1 warning",
+        )
+
+    def test_verbose_text_lists_every_skill_and_summarizes(self) -> None:
+        self.assertEqual(
+            render_text(build_run(), verbose=True),
             "skill: first\n"
             "  error description.missing: description is required [description]\n"
             "  warning metadata.extra-key: metadata.owner is not part of the repo "
@@ -84,7 +94,31 @@ class ReportTestCase(unittest.TestCase):
             payload["failures"],
             [{"path": "missing", "message": "path does not exist: missing"}],
         )
-        self.assertEqual(render_text(run), "skill: second\n1 skill checked, 0 errors, 0 warnings")
+        self.assertEqual(render_text(run), "")
+
+    def test_warning_only_run_renders_findings_and_summary(self) -> None:
+        run = Run(
+            results=(
+                SkillResult(
+                    path=Path("first"),
+                    findings=[
+                        Finding.warning(
+                            "metadata.extra-key",
+                            "metadata.owner is not part of the repo convention",
+                            "metadata.owner",
+                        )
+                    ],
+                ),
+            )
+        )
+
+        self.assertEqual(
+            render_text(run),
+            "skill: first\n"
+            "  warning metadata.extra-key: metadata.owner is not part of the repo "
+            "convention [metadata.owner]\n"
+            "1 skill checked, 0 errors, 1 warning",
+        )
 
     def test_empty_run_renders_no_text_and_empty_json(self) -> None:
         empty = Run()
@@ -99,14 +133,27 @@ class ReportTestCase(unittest.TestCase):
             },
         )
 
+    def test_clean_run_is_quiet_by_default(self) -> None:
+        clean = Run(results=(SkillResult(path=Path("only")),))
+
+        self.assertEqual(render_text(clean), "")
+        self.assertEqual(
+            render_text(clean, verbose=True),
+            "skill: only\n1 skill checked, 0 errors, 0 warnings",
+        )
+
     def test_summary_uses_singular_forms(self) -> None:
         self.assertTrue(
             render_text(build_run()).endswith(
                 "2 skills checked, 1 error, 1 warning"
             )
         )
-        single = Run(results=(SkillResult(path=Path("only")),))
-        self.assertEqual(render_text(single), "skill: only\n1 skill checked, 0 errors, 0 warnings")
+        verbose_single = Run(results=(SkillResult(path=Path("only")),))
+        self.assertTrue(
+            render_text(verbose_single, verbose=True).endswith(
+                "1 skill checked, 0 errors, 0 warnings"
+            )
+        )
 
 
 if __name__ == "__main__":

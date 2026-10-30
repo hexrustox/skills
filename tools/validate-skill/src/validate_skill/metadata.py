@@ -1,7 +1,15 @@
+import re
 from collections.abc import Mapping
 
 from validate_skill.frontmatter import Frontmatter
 from validate_skill.model import Finding
+
+_SEMVER_PATTERN = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)"
+    r"(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?"
+    r"(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$"
+)
 
 
 def _missing_version() -> Finding:
@@ -63,6 +71,14 @@ def _check_metadata_version(metadata: Mapping[object, object]) -> list[Finding]:
             Finding.error(
                 "metadata.version.empty",
                 "metadata.version must not be empty",
+                "metadata.version",
+            )
+        ]
+    if _SEMVER_PATTERN.fullmatch(version) is None:
+        return [
+            Finding.error(
+                "metadata.version.semver",
+                "metadata.version must be a valid semantic version (e.g. 1.0.0)",
                 "metadata.version",
             )
         ]
