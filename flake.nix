@@ -49,6 +49,7 @@
               ];
             })
 
+            cacert
             git
             nixd
             nixfmt
