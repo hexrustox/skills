@@ -1,0 +1,3 @@
+[language-server]
+ruff = { command = "uv", args = ["run", "ruff", "server"] }
+ty = { command = "uv", args = ["run", "ty", "server"] }

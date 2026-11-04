@@ -61,9 +61,3 @@ Prefer a reusable procedure over a one-off answer: "Read the schema, join on `_i
 - **Validation loop** — do the work, run a validator, fix failures, repeat until it passes.
 - **Plan-validate-execute** — for batch or destructive work, write a structured plan, validate it against a source of truth, then execute.
 - **Bundled script** — when traces show the agent reinventing the same helper each run, write and test it once in `scripts/`.
-
-## Refine with execution
-
-Treat the first draft as a hypothesis. Run the skill on real tasks and read execution traces, not just final outputs. Watch for three failure modes: vague instructions trigger trial and error, irrelevant instructions get followed anyway, and menus without defaults stall the agent. Move every correction into the skill, usually as a gotcha, and cut instructions that produce no useful work.
-
-For the formal test loop, read [evaluation.md](evaluation.md).
