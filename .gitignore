@@ -1,3 +1,7 @@
 .direnv/
-.eval/
 __pycache__/
+
+# skill-creator eval runs
+*-workspace/
+feedback.json
+evals/
