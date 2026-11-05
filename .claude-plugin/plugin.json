@@ -1,6 +1,6 @@
 {
   "skills": [
-    "./skills/init-agent-infrastructure",
+    "./skills/authoring-agents-md",
     "./skills/rust/rust-code-style",
     "./skills/to-behavior-contract",
     "./skills/audit-behavior-contract"
