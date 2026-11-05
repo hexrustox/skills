@@ -57,29 +57,27 @@ class DocumentTestCase(unittest.TestCase):
         )
 
     def test_missing_name_reports_name_missing(self) -> None:
-        frontmatter = (
-            'description: Does an example task.\nmetadata:\n  version: "1.0.0"\n'
-        )
+        frontmatter = "description: Does an example task.\n"
         self.assert_document_rules(
             build_document(frontmatter=frontmatter), ["name.missing"]
         )
 
     def test_missing_description_reports_description_missing(self) -> None:
-        frontmatter = 'name: example\nmetadata:\n  version: "1.0.0"\n'
+        frontmatter = "name: example\n"
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
             ["description.missing"],
         )
 
     def test_empty_name_and_description_report_empty_rules(self) -> None:
-        frontmatter = 'name: ""\ndescription: ""\nmetadata:\n  version: "1.0.0"\n'
+        frontmatter = 'name: ""\ndescription: ""\n'
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
             ["name.empty", "description.empty"],
         )
 
     def test_non_string_name_and_description_report_type_rules(self) -> None:
-        frontmatter = 'name: 5\ndescription: [text]\nmetadata:\n  version: "1.0.0"\n'
+        frontmatter = "name: 5\ndescription: [text]\n"
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
             ["name.type", "description.type"],
@@ -122,12 +120,7 @@ class DocumentTestCase(unittest.TestCase):
 
     def test_name_and_description_at_maximum_length_pass(self) -> None:
         max_name = "a" * 64
-        frontmatter = (
-            f"name: {max_name}\n"
-            f"description: {'d' * 1024}\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
-        )
+        frontmatter = f"name: {max_name}\ndescription: {'d' * 1024}\n"
         self.assert_document_rules(
             build_document(frontmatter=frontmatter, name=max_name),
             [],
@@ -135,9 +128,7 @@ class DocumentTestCase(unittest.TestCase):
         )
 
     def test_description_over_1024_characters_reports_length(self) -> None:
-        frontmatter = (
-            f'name: example\ndescription: {"d" * 1025}\nmetadata:\n  version: "1.0.0"\n'
-        )
+        frontmatter = f"name: example\ndescription: {'d' * 1025}\n"
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
             ["description.length"],
@@ -150,8 +141,6 @@ class DocumentTestCase(unittest.TestCase):
             "disable-model-invocation: true\n"
             "license: MIT\n"
             "compatibility: Requires Python 3.11 or newer.\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
         )
         self.assert_document_rules(build_document(frontmatter=frontmatter), [])
 
@@ -160,8 +149,6 @@ class DocumentTestCase(unittest.TestCase):
             "name: example\n"
             "description: Does an example task.\n"
             'disable-model-invocation: "yes"\n'
-            "metadata:\n"
-            '  version: "1.0.0"\n'
         )
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
@@ -170,11 +157,7 @@ class DocumentTestCase(unittest.TestCase):
 
     def test_non_string_license_reports_type(self) -> None:
         frontmatter = (
-            "name: example\n"
-            "description: Does an example task.\n"
-            "license: 123\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
+            "name: example\ndescription: Does an example task.\nlicense: 123\n"
         )
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
@@ -186,8 +169,6 @@ class DocumentTestCase(unittest.TestCase):
             "name: example\n"
             "description: Does an example task.\n"
             "compatibility: [linux]\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
         )
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
@@ -201,8 +182,6 @@ class DocumentTestCase(unittest.TestCase):
                     "name: example\n"
                     "description: Does an example task.\n"
                     f'compatibility: "{compatibility}"\n'
-                    "metadata:\n"
-                    '  version: "1.0.0"\n'
                 )
                 self.assert_document_rules(
                     build_document(frontmatter=frontmatter),
@@ -220,46 +199,11 @@ class DocumentTestCase(unittest.TestCase):
 
     def test_non_string_metadata_value_reports_value_type(self) -> None:
         frontmatter = (
-            "name: example\n"
-            "description: Does an example task.\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
-            "  owner: 5\n"
+            "name: example\ndescription: Does an example task.\nmetadata:\n  owner: 5\n"
         )
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),
-            ["metadata.value-type", "metadata.extra-key"],
-        )
-
-    def test_allowed_tools_warns_without_validating_its_value(self) -> None:
-        for allowed_tools in ("Bash Read", "", "[Bash]"):
-            with self.subTest(allowed_tools=allowed_tools):
-                frontmatter = (
-                    "name: example\n"
-                    "description: Does an example task.\n"
-                    "metadata:\n"
-                    '  version: "1.0.0"\n'
-                    f"allowed-tools: {allowed_tools}\n"
-                )
-                self.assert_document_rules(
-                    build_document(frontmatter=frontmatter),
-                    ["frontmatter.allowed-tools.experimental"],
-                )
-
-    def test_missing_metadata_reports_version_missing(self) -> None:
-        frontmatter = "name: example\ndescription: Does an example task.\n"
-        self.assert_document_rules(
-            build_document(frontmatter=frontmatter),
-            ["metadata.version.missing"],
-        )
-
-    def test_empty_metadata_mapping_reports_version_missing(self) -> None:
-        frontmatter = (
-            "name: example\ndescription: Does an example task.\nmetadata: {}\n"
-        )
-        self.assert_document_rules(
-            build_document(frontmatter=frontmatter),
-            ["metadata.version.missing"],
+            ["metadata.value-type"],
         )
 
     def test_non_string_metadata_key_reports_key_type(self) -> None:
@@ -267,7 +211,7 @@ class DocumentTestCase(unittest.TestCase):
             "name: example\n"
             "description: Does an example task.\n"
             "metadata:\n"
-            '  version: "1.0.0"\n'
+            "  owner: team\n"
             "  5: five\n"
         )
         self.assert_document_rules(
@@ -275,93 +219,42 @@ class DocumentTestCase(unittest.TestCase):
             ["metadata.key-type"],
         )
 
-    def test_empty_metadata_version_reports_version_empty(self) -> None:
+    def test_arbitrary_string_metadata_passes(self) -> None:
         frontmatter = (
             "name: example\n"
             "description: Does an example task.\n"
             "metadata:\n"
-            '  version: ""\n'
-        )
-        self.assert_document_rules(
-            build_document(frontmatter=frontmatter),
-            ["metadata.version.empty"],
-        )
-
-    def test_non_string_metadata_version_reports_version_type(self) -> None:
-        frontmatter = (
-            "name: example\n"
-            "description: Does an example task.\n"
-            "metadata:\n"
-            "  version: 1\n"
-        )
-        self.assert_document_rules(
-            build_document(frontmatter=frontmatter),
-            ["metadata.version.type"],
-        )
-
-    def test_valid_semver_metadata_versions_pass(self) -> None:
-        for version in (
-            "1.0.0",
-            "0.1.0",
-            "10.20.30",
-            "1.0.0-alpha.1",
-            "1.0.0+build.5",
-            "1.0.0-rc.1+build.5",
-        ):
-            with self.subTest(version=version):
-                frontmatter = (
-                    "name: example\n"
-                    "description: Does an example task.\n"
-                    "metadata:\n"
-                    f'  version: "{version}"\n'
-                )
-                self.assert_document_rules(
-                    build_document(frontmatter=frontmatter),
-                    [],
-                )
-
-    def test_invalid_semver_metadata_versions_report_semver(self) -> None:
-        for version in (
-            "1.0",
-            "v1.0.0",
-            "01.0.0",
-            "1.0.0.0",
-            "1.0.0-",
-            "1.0.0-alpha..1",
-            "1.0.0-01",
-        ):
-            with self.subTest(version=version):
-                frontmatter = (
-                    "name: example\n"
-                    "description: Does an example task.\n"
-                    "metadata:\n"
-                    f'  version: "{version}"\n'
-                )
-                self.assert_document_rules(
-                    build_document(frontmatter=frontmatter),
-                    ["metadata.version.semver"],
-                )
-
-    def test_extra_metadata_key_warns(self) -> None:
-        frontmatter = (
-            "name: example\n"
-            "description: Does an example task.\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
             "  owner: team\n"
+            '  version: "not a semver"\n'
         )
-        self.assert_document_rules(
-            build_document(frontmatter=frontmatter),
-            ["metadata.extra-key"],
+        self.assert_document_rules(build_document(frontmatter=frontmatter), [])
+
+    def test_missing_metadata_passes(self) -> None:
+        frontmatter = "name: example\ndescription: Does an example task.\n"
+        self.assert_document_rules(build_document(frontmatter=frontmatter), [])
+
+    def test_empty_metadata_mapping_passes(self) -> None:
+        frontmatter = (
+            "name: example\ndescription: Does an example task.\nmetadata: {}\n"
         )
+        self.assert_document_rules(build_document(frontmatter=frontmatter), [])
+
+    def test_allowed_tools_warns_without_validating_its_value(self) -> None:
+        for allowed_tools in ("Bash Read", "", "[Bash]"):
+            with self.subTest(allowed_tools=allowed_tools):
+                frontmatter = (
+                    "name: example\n"
+                    "description: Does an example task.\n"
+                    f"allowed-tools: {allowed_tools}\n"
+                )
+                self.assert_document_rules(
+                    build_document(frontmatter=frontmatter),
+                    ["frontmatter.allowed-tools.experimental"],
+                )
 
     def test_unknown_top_level_key_warns(self) -> None:
         frontmatter = (
-            "name: example\n"
-            "description: Does an example task.\n"
-            "metadata:\n"
-            '  version: "1.0.0"\n'
-            "unknown: value\n"
+            "name: example\ndescription: Does an example task.\nunknown: value\n"
         )
         self.assert_document_rules(
             build_document(frontmatter=frontmatter),

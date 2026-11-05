@@ -18,9 +18,9 @@ def build_run() -> Run:
                         "description",
                     ),
                     Finding.warning(
-                        "metadata.extra-key",
-                        "metadata.owner is not part of the repo convention",
-                        "metadata.owner",
+                        "frontmatter.unknown-key",
+                        "unknown frontmatter key 'owner'",
+                        "owner",
                     ),
                 ],
             ),
@@ -35,8 +35,8 @@ class ReportTestCase(unittest.TestCase):
             render_text(build_run()),
             "skill: first\n"
             "  error description.missing: description is required [description]\n"
-            "  warning metadata.extra-key: metadata.owner is not part of the repo "
-            "convention [metadata.owner]\n"
+            "  warning frontmatter.unknown-key: unknown frontmatter key 'owner' "
+            "[owner]\n"
             "2 skills checked, 1 error, 1 warning",
         )
 
@@ -45,8 +45,8 @@ class ReportTestCase(unittest.TestCase):
             render_text(build_run(), verbose=True),
             "skill: first\n"
             "  error description.missing: description is required [description]\n"
-            "  warning metadata.extra-key: metadata.owner is not part of the repo "
-            "convention [metadata.owner]\n"
+            "  warning frontmatter.unknown-key: unknown frontmatter key 'owner' "
+            "[owner]\n"
             "skill: second\n"
             "2 skills checked, 1 error, 1 warning",
         )
@@ -69,9 +69,9 @@ class ReportTestCase(unittest.TestCase):
                             },
                             {
                                 "severity": "warning",
-                                "rule": "metadata.extra-key",
-                                "message": "metadata.owner is not part of the repo convention",
-                                "location": "metadata.owner",
+                                "rule": "frontmatter.unknown-key",
+                                "message": "unknown frontmatter key 'owner'",
+                                "location": "owner",
                             },
                         ],
                     },
@@ -103,9 +103,9 @@ class ReportTestCase(unittest.TestCase):
                     path=Path("first"),
                     findings=[
                         Finding.warning(
-                            "metadata.extra-key",
-                            "metadata.owner is not part of the repo convention",
-                            "metadata.owner",
+                            "frontmatter.unknown-key",
+                            "unknown frontmatter key 'owner'",
+                            "owner",
                         )
                     ],
                 ),
@@ -115,8 +115,8 @@ class ReportTestCase(unittest.TestCase):
         self.assertEqual(
             render_text(run),
             "skill: first\n"
-            "  warning metadata.extra-key: metadata.owner is not part of the repo "
-            "convention [metadata.owner]\n"
+            "  warning frontmatter.unknown-key: unknown frontmatter key 'owner' "
+            "[owner]\n"
             "1 skill checked, 0 errors, 1 warning",
         )
 

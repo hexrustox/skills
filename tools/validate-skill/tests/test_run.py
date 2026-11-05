@@ -41,8 +41,6 @@ class RunTestCase(RepoTestCase):
         first = self.write_document(
             frontmatter="""\
             name: first
-            metadata:
-              version: "1.0.0"
             """,
             name="first",
         )
@@ -73,8 +71,6 @@ class RunTestCase(RepoTestCase):
         skill_dir = self.write_document(
             frontmatter="""\
             name: example
-            metadata:
-              version: "1.0.0"
             """,
             register=False,
         )

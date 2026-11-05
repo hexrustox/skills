@@ -10,17 +10,13 @@ class CliJsonTestCase(RepoTestCase):
             frontmatter="""\
             name: warning
             description: Does an example task.
-            metadata:
-              version: "1.0.0"
-              owner: team
+            unknown: value
             """,
             name="warning",
         )
         failing = self.write_document(
             frontmatter="""\
             name: failing
-            metadata:
-              version: "1.0.0"
             """,
             name="failing",
         )
@@ -50,10 +46,9 @@ class CliJsonTestCase(RepoTestCase):
             [
                 {
                     "severity": "warning",
-                    "rule": "metadata.extra-key",
-                    "message": "metadata.owner is not part of the repo convention; "
-                    "only version is expected",
-                    "location": "metadata.owner",
+                    "rule": "frontmatter.unknown-key",
+                    "message": "unknown frontmatter key 'unknown'",
+                    "location": "unknown",
                 }
             ],
         )
@@ -66,9 +61,7 @@ class CliJsonTestCase(RepoTestCase):
             frontmatter="""\
             name: warning
             description: Does an example task.
-            metadata:
-              version: "1.0.0"
-              owner: team
+            unknown: value
             """,
             body="Read `references/missing.md`.",
             name="warning",
@@ -77,7 +70,6 @@ class CliJsonTestCase(RepoTestCase):
             frontmatter="""\
             name: failing
             description: Does an example task.
-            metadata: {}
             """,
             body="# Failing",
             name="failing",
@@ -94,7 +86,7 @@ class CliJsonTestCase(RepoTestCase):
         )
         json_finding_count = sum(len(skill["findings"]) for skill in payload["skills"])
         self.assertEqual(json_finding_count, text_finding_count)
-        self.assertIn("metadata.extra-key", text_result.stdout)
+        self.assertIn("frontmatter.unknown-key", text_result.stdout)
         for skill in payload["skills"]:
             for finding in skill["findings"]:
                 self.assertIn(
@@ -108,8 +100,6 @@ class CliJsonTestCase(RepoTestCase):
             frontmatter="""\
             name: example
             description: Does an example task.
-            metadata:
-              version: "1.0.0"
             unknown: value
             """
         )

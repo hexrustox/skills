@@ -40,8 +40,7 @@ class CliTestCase(RepoTestCase):
     def test_findings_are_grouped_per_skill_before_summary(self) -> None:
         skill_dir = self.write_document(
             frontmatter="""\
-            metadata:
-              version: "1.0.0"
+            license: MIT
             """
         )
 
@@ -113,8 +112,6 @@ class CliTestCase(RepoTestCase):
         failing = self.write_document(
             frontmatter="""\
             name: failing
-            metadata:
-              version: "1.0.0"
             """,
             name="failing",
         )
@@ -131,8 +128,6 @@ class CliTestCase(RepoTestCase):
             frontmatter="""\
             name: first
             description: Does an example task.
-            metadata:
-              version: "1.0.0"
             unknown: value
             """,
             name="first",

@@ -1,8 +1,6 @@
 ---
 name: audit-behavior-contract
 description: Audit code against the behavior contracts in docs/behavior/ and report drift in either direction.
-metadata:
-  version: "1.0.0"
 disable-model-invocation: true
 ---
 

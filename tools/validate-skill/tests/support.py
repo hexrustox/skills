@@ -21,12 +21,7 @@ def run_cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
 
 
 def valid_frontmatter(*, name: str = "example") -> str:
-    return (
-        f"name: {name}\n"
-        "description: Does an example task.\n"
-        "metadata:\n"
-        '  version: "1.0.0"\n'
-    )
+    return f"name: {name}\ndescription: Does an example task.\n"
 
 
 def build_document(

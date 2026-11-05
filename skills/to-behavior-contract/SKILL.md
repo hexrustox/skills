@@ -1,8 +1,6 @@
 ---
 name: to-behavior-contract
 description: "Synthesize the current conversation and codebase into behavior-contract docs under `docs/behavior/`."
-metadata:
-  version: "1.2.4"
 disable-model-invocation: true
 ---
 

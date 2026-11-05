@@ -1,8 +1,6 @@
 ---
 name: rust-code-style
 description: Style Rust code as you write, edit, or review it — comments, names, imports, visibility, ordering, type annotations. Use whenever touching Rust code.
-metadata:
-  version: "1.0.0"
 ---
 
 # Rust code style
