@@ -1,0 +1,52 @@
+# Smoke task: prove coder-eval 0.12.16 drives OpenCode 1.19.5 end-to-end.
+#
+# The with-skill variant injects the bare skill directory, per #23. This task
+# is not an A/B experiment; the create/update-mode tasks are the real pair.
+task_id: "smoke-authoring-agents-md"
+description: "OpenCode 1.19.5 loads authoring-agents-md and writes a root AGENTS.md"
+tags: ["smoke"]
+
+initial_prompt: |
+  Write the root AGENTS.md for this repository. A coding agent should be able to
+  read it and work here without re-reading the whole codebase: the commands to
+  run, the constraints it must not miss, and when it should stop and ask. Work
+  from the repository's actual setup, and cover the root only; do not create
+  nested AGENTS.md files.
+
+agent:
+  type: "opencode"
+  model: "opencode-go/deepseek-v4.1-flash"
+  permission_mode: "acceptEdits"
+
+sandbox:
+  driver: "tempdir"
+  template_sources:
+    - type: "template_dir"
+      path: "../fixtures/smoke/repo"
+
+success_criteria:
+  - type: "file_exists"
+    path: "AGENTS.md"
+    description: "Root AGENTS.md is created"
+    weight: 1.0
+
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '\bpnpm (run )?lint\b'
+        must_match: true
+      - pattern: '\bpnpm (run )?typecheck\b'
+        must_match: true
+      - pattern: '\bpnpm (run )?test\b'
+        must_match: true
+      - pattern: '\bnpm (install|test|run)\b'
+        must_match: false
+    description: "Uses the real pnpm task runner, not the stale README commands"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: "skill_triggered"
+    description: "The agent engaged authoring-agents-md"
+    skill_name: "authoring-agents-md"
+    expected_skill: "authoring-agents-md"
+    weight: 1.0

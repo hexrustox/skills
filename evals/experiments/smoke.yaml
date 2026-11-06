@@ -1,0 +1,21 @@
+# Smoke experiment: one with-skill variant so the run exercises the same
+# variant/plugin path the real A/B will use.
+experiment_id: smoke-opencode
+description: "Smoke test for OpenCode 1.19.5 and the injected authoring-agents-md skill"
+
+defaults:
+  run_limits:
+    task_timeout: 300
+    turn_timeout: 120
+  agent:
+    type: opencode
+    model: opencode-go/deepseek-v4.1-flash
+    permission_mode: acceptEdits
+
+variants:
+  - variant_id: with-skill
+    description: "authoring-agents-md injected from the bare skill directory"
+    agent:
+      plugins:
+        - type: local
+          path: /home/user/Projects/skills/skills/authoring-agents-md
