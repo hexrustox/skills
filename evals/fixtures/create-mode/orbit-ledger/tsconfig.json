@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/money" },
+    { "path": "packages/ledger" },
+    { "path": "packages/api" }
+  ]
+}

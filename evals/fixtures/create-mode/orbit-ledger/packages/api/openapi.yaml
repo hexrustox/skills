@@ -1,0 +1,41 @@
+openapi: 3.1.0
+info:
+  title: Orbit Ledger API
+  version: 1.0.0
+paths:
+  /entries:
+    get:
+      summary: List ledger entries
+      responses:
+        "200":
+          description: Ledger entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LedgerEntry"
+components:
+  schemas:
+    Money:
+      type: string
+      pattern: "^-?[0-9]+$"
+      description: Integer cents, serialized as a decimal string.
+    LedgerEntry:
+      type: object
+      required: [id, debit, credit]
+      properties:
+        id:
+          type: string
+        debit:
+          $ref: "#/components/schemas/Posting"
+        credit:
+          $ref: "#/components/schemas/Posting"
+    Posting:
+      type: object
+      required: [account, amount]
+      properties:
+        account:
+          type: string
+        amount:
+          $ref: "#/components/schemas/Money"

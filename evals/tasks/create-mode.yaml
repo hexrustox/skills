@@ -1,0 +1,197 @@
+# Prototype task for the create-mode arm of the authoring-agents-md evaluation.
+#
+# Skill injection deliberately lives in the experiment variant, not here:
+# the without-skill arm must be able to clear `agent.plugins` to `[]`.
+# See the single-skill injection finding (#23) and the run-command decision (#18).
+task_id: "authoring-agents-md-create-root"
+description: "Create a root AGENTS.md for a pnpm/TypeScript monorepo from repository evidence"
+tags: ["authoring-agents-md", "create-mode"]
+
+initial_prompt: |
+  Write the root AGENTS.md for this repository. A coding agent should be able to
+  read it and work here without re-reading the whole codebase: the commands to
+  run, the constraints it must not miss, and when it should stop and ask. Work
+  from the repository's actual setup, and cover the root only; do not create
+  nested AGENTS.md files.
+
+agent:
+  type: "opencode"
+  model: "opencode-go/deepseek-v4.1-flash"
+  permission_mode: "acceptEdits"
+
+sandbox:
+  driver: "tempdir"
+  template_sources:
+    - type: "template_dir"
+      path: "../fixtures/create-mode/orbit-ledger"
+
+success_criteria:
+  # Guard: the task produced an artifact at all. Gating, but not a
+  # discriminator on its own.
+  - type: "file_exists"
+    path: "AGENTS.md"
+    description: "Root AGENTS.md is created"
+    weight: 1.0
+
+  # Gating. The README is stale (npm, and a start script that does not
+  # exist); the manifest and CI are authoritative. The skill's verify step
+  # is what turns this from prose-copying into evidence harvesting.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '\bpnpm (run )?lint\b'
+        must_match: true
+      - pattern: '\bpnpm (run )?typecheck\b'
+        must_match: true
+      - pattern: '\bpnpm (run )?test\b'
+        must_match: true
+      - pattern: '\bnpm (install|test|run)\b'
+        must_match: false
+      - pattern: '\byarn (install|add|run|test)\b'
+        must_match: false
+    description: "Toolchain uses pnpm and the repo's verification commands, not the stale README commands"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Gating. codegen and db:migrate are repo-specific commands that are not
+  # visible from the README. The exclusion catches a command copied from
+  # the README that has no script behind it.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '\bpnpm (run )?db:migrate\b'
+        must_match: true
+      - pattern: '\bpnpm (run )?codegen\b'
+        must_match: true
+      - pattern: '\bpnpm (run )?(start|dev)\b'
+        must_match: false
+    description: "Repo-specific commands are captured and no scripts are invented"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Gating. ADR 0002 is the only place the wire format and the construction
+  # rule are stated; the skill tells the agent to read ADRs. This is the
+  # main non-obvious gotcha in the fixture.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)(integer|bigint)\s+cents|cents\s+(as|are)\s+(integer|bigint)'
+        must_match: true
+      - pattern: '(?is)(decimal string|serializ(e|ed|es|ation).{0,40}string|string.{0,40}(wire|JSON|API))'
+        must_match: true
+      - pattern: '(?i)(@orbit/money|Money\.fromCents)'
+        must_match: true
+    description: "Money is integer cents and serialized as a decimal string, per ADR 0002"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Gating. The generated client and codegen script make this a real
+  # boundary; the skill tells the agent to read the source layout and name
+  # the authority instead of restating it.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)generated'
+        must_match: true
+      - pattern: '(?i)codegen'
+        must_match: true
+    description: "The generated API client boundary points at codegen instead of hand edits"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Gating. The migration script is the only place the production guard is
+  # stated. It is a hard limit, so it belongs in Judgment Boundaries.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?is)(production|prod).{0,160}(migrat|db:migrate)|(migrat|db:migrate).{0,160}(production|prod)'
+        must_match: true
+      - pattern: '(?i)(ALLOW_PROD_MIGRATION|explicit (approval|confirmation)|after review|sign-?off|ask (before|first))'
+        must_match: true
+    description: "Production migration requires an explicit guard, per scripts/migrate.mjs"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating. The Toolchain table plus the Judgment Boundaries groups are the
+  # skill's distinctive shape; a generic AGENTS.md rarely lands both.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?im)^#{2,3}\s+Toolchain\s*$'
+        must_match: true
+      - pattern: '(?im)^\|\s*\*{0,2}(Intent|Task|Action)\*{0,2}\s*\|\s*\*{0,2}(Command|Commands?)\*{0,2}\s*\|\s*\*{0,2}(Authority|Source|Owner)\*{0,2}\s*\|'
+        must_match: true
+      - pattern: '(?im)^#{2,3}\s+Judgment Boundaries\s*$'
+        must_match: true
+      - pattern: '(?im)^(?:[-*]\s+)?(?:\*\*|###?\s*)(Ask|Always|Never)\b'
+        must_match: true
+    description: "Uses the skill's Toolchain table and Judgment Boundaries shape"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating. The skill's exclude list names versions as frequently changing
+  # facts; these are the two a base model most often copies in.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)\bnode(\.js)?\s*(v|version\s*)?22\b'
+        must_match: false
+      - pattern: '(?i)\bpnpm@?\s*9\.12\.0\b'
+        must_match: false
+    description: "Leaves frequently changing version facts to the manifest and CI"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating. The fixture's Biome and TypeScript configs own formatting and
+  # strictness; the skill says to point at the config rather than copy it.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)(2[- ]space|two[- ]space|indent(ation)?\s+(of\s+)?2)'
+        must_match: false
+      - pattern: '(?i)single[- ]quotes?'
+        must_match: false
+      - pattern: '(?i)(typescript|tsconfig).{0,40}\bstrict\b|\bstrict\b.{0,40}(typescript|tsconfig)'
+        must_match: false
+    description: "Leaves formatter and compiler settings to biome.json and tsconfig"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating, but tolerant of one slip. These phrases are the skill's own
+  # examples of self-evident advice; five of them means the file is filler.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)best practices'
+        must_match: false
+      - pattern: '(?i)clean code'
+        must_match: false
+      - pattern: '(?i)meaningful (variable )?names'
+        must_match: false
+      - pattern: '(?i)be careful'
+        must_match: false
+      - pattern: '(?i)\bDRY\b'
+        must_match: false
+    description: "No generic filler that does not change agent behavior"
+    weight: 1.0
+    pass_threshold: 0.8
+
+  # Gating guard. The skill's root budget is roughly 200 lines; a base model
+  # usually passes this, so it guards the rule rather than providing signal.
+  - type: "run_command"
+    command: 'test "$(wc -l < AGENTS.md)" -le 200'
+    timeout: 10
+    read_only: true
+    description: "Root AGENTS.md stays within the skill's ~200-line limit"
+    weight: 1.0
+
+  # Informational. ADR 0001 is real evidence, but the root file can
+  # legitimately leave the package boundary to the manifests. The report
+  # still shows whether the agent harvested it.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?is)(@orbit/ledger).{0,200}(@orbit/api)|(@orbit/api).{0,200}(@orbit/ledger)'
+        must_match: true
+    description: "Optional: captures the package dependency boundary from ADR 0001"
+    weight: 0.0
