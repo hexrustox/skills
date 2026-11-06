@@ -1,0 +1,311 @@
+# Prototype task for the update-mode arm of the authoring-agents-md evaluation.
+#
+# Skill injection deliberately lives in the experiment variant, not here:
+# the without-skill arm must be able to clear `agent.plugins` to `[]`.
+# See the single-skill injection finding (#23) and the run-command decision (#18).
+task_id: "authoring-agents-md-update"
+description: "Audit and update an existing root and nested AGENTS.md against repository evidence"
+tags: ["authoring-agents-md", "update-mode"]
+
+initial_prompt: |
+  Audit the AGENTS.md files in this repository and bring them up to date. They
+  have drifted: some commands and rules are stale, verifiable facts sit in more
+  than one place, the root and package files disagree, and generic advice has
+  crept in. Keep what is still true and useful; remove or rewrite everything
+  else. Do not create new documentation files.
+
+agent:
+  type: "opencode"
+  model: "opencode-go/deepseek-v4.1-flash"
+  permission_mode: "acceptEdits"
+
+sandbox:
+  driver: "tempdir"
+  template_sources:
+    - type: "template_dir"
+      path: "../fixtures/update-mode/orbit-ledger"
+
+success_criteria:
+  # Gating guard. Update mode is about auditing the files that exist, not
+  # widening the target set. Both files must survive and no third AGENTS.md may
+  # appear in the fixture's packages or docs.
+  - type: "run_command"
+    command: 'test -f AGENTS.md && test -f packages/api/AGENTS.md && test "$(find . -name AGENTS.md -not -path "./node_modules/*" -not -path "./.git/*" | wc -l)" -eq 2'
+    timeout: 10
+    read_only: true
+    description: "Both AGENTS.md files survive and no new AGENTS.md files are created"
+    weight: 1.0
+
+  # Gating. The root's Quick start block copies the stale README (npm and a
+  # start script that does not exist). The manifest and CI are authoritative.
+  # This is the skill's verify-every-command step applied to an audit.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '\bpnpm (run )?lint\b'
+        must_match: true
+      - pattern: '\bpnpm (run )?typecheck\b'
+        must_match: true
+      - pattern: '\bpnpm (run )?test\b'
+        must_match: true
+      - pattern: '\bnpm (install|test|run)\b'
+        must_match: false
+      - pattern: '\byarn (install|add|run|test)\b'
+        must_match: false
+    description: "Root toolchain keeps pnpm and the repository verification commands, not the stale README commands"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Gating. codegen and db:migrate are repo-specific commands that are only
+  # visible in the task runner, CI, and scripts. The exclusion catches a start
+  # or dev command copied from the README with no script behind it.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '\bpnpm (run )?db:migrate\b'
+        must_match: true
+      - pattern: '\bpnpm (run )?codegen\b'
+        must_match: true
+      - pattern: '\bpnpm (run )?(start|dev)\b'
+        must_match: false
+    description: "Root keeps the repo-specific commands and does not invent a start or dev script"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Gating. ADR 0002 is the only source for the wire rule. The audit must
+  # preserve the money rule while deleting the nested file's contradictory
+  # JavaScript-number version.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)(integer|bigint)\s+cents|cents\s+(as|are)\s+(integer|bigint)'
+        must_match: true
+      - pattern: '(?is)(decimal string|serializ(e|ed|es|ation).{0,40}string|string.{0,40}(wire|JSON|API))'
+        must_match: true
+      - pattern: '(?i)(@orbit/money|Money\.fromCents)'
+        must_match: true
+    description: "Root keeps the integer-cents and decimal-string wire rule from ADR 0002"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Gating. The generated client and codegen script make this a real boundary.
+  # Root keeps the authority and the manual-edit prohibition.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)generated'
+        must_match: true
+      - pattern: '(?i)codegen'
+        must_match: true
+    description: "Root keeps the generated API client boundary and its codegen authority"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating. The migration script is the only place the production guard is
+  # stated. It is a hard limit, so it belongs in Judgment Boundaries.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?is)(production|prod).{0,160}(migrat|db:migrate)|(migrat|db:migrate).{0,160}(production|prod)'
+        must_match: true
+      - pattern: '(?i)(ALLOW_PROD_MIGRATION|explicit (approval|confirmation)|after review|sign-?off|ask (before|first))'
+        must_match: true
+    description: "Root keeps the production migration guard from scripts/migrate.mjs"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating guard. The existing files already have the skill's shape; a bad
+  # audit should not flatten them into generic prose.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?im)^#{2,3}\s+Toolchain\s*$'
+        must_match: true
+      - pattern: '(?im)^\|\s*\*{0,2}(Intent|Task|Action)\*{0,2}\s*\|\s*\*{0,2}(Command|Commands?)\*{0,2}\s*\|\s*\*{0,2}(Authority|Source|Owner)\*{0,2}\s*\|'
+        must_match: true
+      - pattern: '(?im)^#{2,3}\s+Judgment Boundaries\s*$'
+        must_match: true
+      - pattern: '(?im)^(?:[-*]\s+)?(?:\*\*|###?\s*)(Ask|Always|Never)\b'
+        must_match: true
+    description: "Root keeps the Toolchain table and Judgment Boundaries shape"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating. The skill excludes frequently changing version facts. The fixture
+  # seeds both versions in the stale Quick start block.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)\bnode(\.js)?\s*(v|version\s*)?22\b'
+        must_match: false
+      - pattern: '(?i)\bpnpm@?\s*9\.12\.0\b'
+        must_match: false
+    description: "Root removes frequently changing Node and pnpm version facts"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating. Biome owns formatting. The seeded Code style section restates the
+  # config instead of pointing at it.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)(2[- ]space|two[- ]space|indent(ation)?\s+(of\s+)?2)'
+        must_match: false
+      - pattern: '(?i)single[- ]quotes?'
+        must_match: false
+    description: "Root removes formatter settings that biome.json already owns"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating, but tolerant of one slip. These phrases are the skill's own
+  # examples of self-evident advice; four of the five are seeded here.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)best practices'
+        must_match: false
+      - pattern: '(?i)clean code'
+        must_match: false
+      - pattern: '(?i)meaningful (variable )?names'
+        must_match: false
+      - pattern: '(?i)be careful'
+        must_match: false
+      - pattern: '(?i)\bDRY\b'
+        must_match: false
+    description: "Root removes generic filler that does not change agent behavior"
+    weight: 1.0
+    pass_threshold: 0.8
+
+  # Gating. The seeded pointer and blanket read are both stale: docs/architecture.md
+  # does not exist, and the update reference replaces blanket reads with
+  # conditional pointers. Use a conditional pointer or delete the line.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)docs/architecture\.md'
+        must_match: false
+      - pattern: '(?i)before every (edit|change)'
+        must_match: false
+    description: "Root removes the dangling architecture pointer and blanket read instruction"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Gating. The port is a README/API fact, not agent guidance. The skill's
+  # exclude list names frequently changing URLs alongside versions.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?i)localhost:3000'
+        must_match: false
+    description: "Root removes the README copied development URL"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating guard. The skill's root budget is roughly 200 lines; a base model
+  # usually passes this, so it guards the rule rather than providing signal.
+  - type: "run_command"
+    command: 'test "$(wc -l < AGENTS.md)" -le 200'
+    timeout: 10
+    read_only: true
+    description: "Root AGENTS.md stays within the skill's ~200-line limit"
+    weight: 1.0
+
+  # Informational. ADR 0001 is real evidence, but the root file can
+  # legitimately leave the package boundary to the manifests. The report still
+  # shows whether the agent harvested it.
+  - type: "file_check"
+    path: "AGENTS.md"
+    patterns:
+      - pattern: '(?is)(@orbit/ledger).{0,200}(@orbit/api)|(@orbit/api).{0,200}(@orbit/ledger)'
+        must_match: true
+    description: "Optional: keeps the package dependency boundary from ADR 0001"
+    weight: 0.0
+
+  # Gating. The nested file's npm command contradicts the root and the
+  # manifest. Correcting it to a scoped pnpm command, or removing the duplicate
+  # command, both satisfy the audit.
+  - type: "file_check"
+    path: "packages/api/AGENTS.md"
+    patterns:
+      - pattern: '\bnpm (install|test|run)\b'
+        must_match: false
+      - pattern: '\byarn (install|add|run|test)\b'
+        must_match: false
+    description: "Nested API instructions no longer contradict the root with npm"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Gating. Money is a root-owned cross-cutting rule. The nested file must not
+  # restate it as a JavaScript number or a Number() conversion; a pointer to the
+  # root is the intended one-home outcome.
+  - type: "file_check"
+    path: "packages/api/AGENTS.md"
+    patterns:
+      - pattern: '(?i)(cents?|Money\.fromCents|Number\s*\(|money.{0,40}\bnumber\b|javascript\s+number)'
+        must_match: false
+    description: "Nested file does not repeat or contradict the root money rule"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Gating. The generated-client rule is root-owned. The nested copy must be
+  # removed or reduced to a pointer; repeating the prohibition or the command
+  # leaves one meaning in two homes.
+  - type: "file_check"
+    path: "packages/api/AGENTS.md"
+    patterns:
+      - pattern: '(?i)(hand-?edit|do not edit|src/generated)'
+        must_match: false
+      - pattern: '\bpnpm (run )?codegen\b'
+        must_match: false
+    description: "Nested file does not duplicate the root generated-client rule"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating. Biome owns the formatting settings and the update reference replaces
+  # blanket reads with conditional ones. Both seeded lines should go.
+  - type: "file_check"
+    path: "packages/api/AGENTS.md"
+    patterns:
+      - pattern: '(?i)(2[- ]space|two[- ]space|indent(ation)?\s+(of\s+)?2)'
+        must_match: false
+      - pattern: '(?i)single[- ]quotes?'
+        must_match: false
+      - pattern: '(?i)(entire codebase|whole codebase|before every (change|edit))'
+        must_match: false
+    description: "Nested file removes restated formatter settings and the blanket codebase read"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating. Root owns repo-wide verification. A nested file may scope the test
+  # command with --filter, but must not repeat the root-wide `pnpm test`.
+  - type: "file_check"
+    path: "packages/api/AGENTS.md"
+    patterns:
+      - pattern: '\bpnpm (run )?test\b(?!\s+--filter)'
+        must_match: false
+    description: "Nested file does not repeat the root-wide test command"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Gating guard. The OpenAPI contract is the package-specific evidence that
+  # must survive the audit; deleting the whole nested file is not a pass.
+  - type: "file_check"
+    path: "packages/api/AGENTS.md"
+    patterns:
+      - pattern: '(?i)openapi\.yaml'
+        must_match: true
+      - pattern: '(?i)(authority|source of truth|contract)'
+        must_match: true
+    description: "Nested file keeps the package-specific OpenAPI contract authority"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Informational. A pointer back to the root is the skill's preferred way to
+  # keep one meaning in one home, but a valid nested file can stand alone.
+  - type: "file_check"
+    path: "packages/api/AGENTS.md"
+    patterns:
+      - pattern: '(?i)root\s+`?AGENTS\.md`?'
+        must_match: true
+    description: "Optional: nested file points at the root for repo-wide guidance"
+    weight: 0.0
