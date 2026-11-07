@@ -1,8 +1,0 @@
-{
-  "skills": [
-    "./skills/authoring-agents-md",
-    "./skills/rust/rust-code-style",
-    "./skills/to-behavior-contract",
-    "./skills/audit-behavior-contract"
-  ]
-}
