@@ -37,7 +37,6 @@
             "cargo"
             "nixd"
             "uv"
-            "validate-skill"
           ];
         };
         container = pkgs.mkShellNoCC {
