@@ -1,9 +1,3 @@
-## Writing skills
-
-Create new skills under `skills/`. `.agents/skills/` holds vendored third-party skills tracked in `skills-lock.json`.
-When creating or editing a skill, read `docs/agents/skill-spec.md` and `docs/agents/skill-best-practices.md`.
-Name skills in the gerund form (`processing-pdfs`, `writing-documentation`), keeping one pattern across the collection.
-
 ## Agent skills
 
 ### Issue tracker
