@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": ["tools/skills"],
+  "policies": [
+    {
+      "action": "integration.use",
+      "resource": "skill:skill-creator",
+      "effect": "deny"
+    }
+  ]
+}
