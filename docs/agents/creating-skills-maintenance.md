@@ -27,7 +27,9 @@ The port keeps the upstream authoring and improvement loop but removes or rewrit
 - Removed packaging, archive creation, file-presentation steps, and harness-specific review instructions.
 - Did not port the upstream validator or packaging script.
 - Replaced the upstream `scripts/utils.py` parser with a standard-library `tools/skills/creating-skills/scripts/frontmatter.py` module and added a `unittest` suite under `tools/skills/creating-skills/tests/`.
-- Eval, benchmark, and description-tuning operations go through a harness adapter rather than hardcoded commands.
+- Added the `Harness` protocol and normalized run results in `tools/skills/creating-skills/scripts/harness.py`, plus a name-keyed adapter registry in `tools/skills/creating-skills/scripts/adapters/`.
+- Added the OpenCode adapter at `tools/skills/creating-skills/scripts/adapters/opencode.py` and its contract, version, scope, invocation, and JSONL documentation at `tools/skills/creating-skills/references/harnesses/opencode.md`.
+- Eval, benchmark, and description-tuning operations go through a harness adapter rather than hardcoded commands. Adapter tests use canned JSONL streams and a fake `opencode` executable, so they never call a live model.
 
 ## Diffing an upstream update
 

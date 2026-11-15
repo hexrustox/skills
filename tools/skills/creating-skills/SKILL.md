@@ -121,6 +121,8 @@ Done when the skill still describes one coherent unit of work and every pointer 
 
 ## Test, review, and improve
 
+Eval work requires a harness adapter. Read [the harness contract and OpenCode adapter](references/harnesses/opencode.md) and confirm it supports the current harness before starting. If the harness has no adapter, stop and ask the user for one instead of substituting harness-specific commands.
+
 The loop is: draft, run realistic cases with and without the skill, review the outputs, improve the skill, and repeat.
 
 1. **Write 2–3 realistic test prompts.** Use something a real user would type, including input files and the expected output. Save them with the skill, for example under `evals/`.
@@ -130,8 +132,6 @@ The loop is: draft, run realistic cases with and without the skill, review the o
 5. **Grade with evidence.** Record `text`, `passed`, and `evidence` for each assertion. Prefer a script for anything that can be checked programmatically.
 6. **Show the review before judging it yourself.** Generate the static review page from the normalized run data and ask the human to review outputs, grades, and previous feedback.
 7. **Improve from the feedback and repeat.** Use a new iteration directory and keep the previous run identity stable so feedback and outputs can be matched across iterations.
-
-Before any eval work, read the adapter documentation shipped with the eval tooling and confirm it supports the current harness. If it does not, stop and ask for an adapter.
 
 ### Generalize from feedback
 
