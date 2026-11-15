@@ -11,6 +11,7 @@ from typing import Any
 
 from scripts.workspace import (
     ARMS,
+    eval_id_from_directory,
     iteration_number,
     run_id,
     skill_name_from_workspace,
@@ -125,12 +126,15 @@ def collect_review(
         )
 
     benchmark = _load_benchmark(iteration, benchmark_path)
+    name = skill_name or _skill_name(iteration, benchmark)
     return {
-        "skill_name": skill_name or _skill_name(iteration, benchmark),
+        "skill_name": name,
         "iteration": iteration.name,
         "runs": runs,
-        "feedback": load_feedback(iteration),
-        "previous": _previous_document(previous_dir) if previous_dir else None,
+        "feedback": load_feedback(iteration, skill_name=name),
+        "previous": (
+            _previous_document(previous_dir, skill_name=name) if previous_dir else None
+        ),
         "benchmark": benchmark,
     }
 
@@ -165,7 +169,9 @@ def find_previous_iteration(iteration_dir: Path) -> Path | None:
     return max(candidates, key=lambda candidate: candidate[0])[1]
 
 
-def load_feedback(iteration_dir: Path) -> dict[str, Any]:
+def load_feedback(
+    iteration_dir: Path, *, skill_name: str | None = None
+) -> dict[str, Any]:
     """Load reviewer feedback saved beside an iteration."""
     iteration = Path(iteration_dir)
     document = _load_json(iteration / "feedback.json")
@@ -180,6 +186,17 @@ def load_feedback(iteration_dir: Path) -> dict[str, Any]:
         raise ValueError(
             f"feedback file {str(iteration / 'feedback.json')!r} is for "
             f"{recorded_iteration!r}, not {iteration.name!r}"
+        )
+    recorded_skill = document.get("skill_name")
+    if (
+        skill_name
+        and isinstance(recorded_skill, str)
+        and recorded_skill
+        and recorded_skill != skill_name
+    ):
+        raise ValueError(
+            f"feedback file {str(iteration / 'feedback.json')!r} is for "
+            f"skill {recorded_skill!r}, not {skill_name!r}"
         )
     reviews: dict[str, str] = {}
     reviewed: list[str] = []
@@ -209,7 +226,7 @@ def _build_run(
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
     arm_dir = eval_dir / arm
-    directory_eval_id = _eval_id_from_directory(eval_dir)
+    directory_eval_id = eval_id_from_directory(eval_dir)
     run_document = _load_json(arm_dir / "run.json") or {}
     error_document = _load_json(arm_dir / "error.json")
     return {
@@ -253,9 +270,9 @@ def _error_message(error_document: dict[str, Any] | None) -> str:
     return _text(detail)
 
 
-def _previous_document(previous_dir: Path) -> dict[str, Any]:
+def _previous_document(previous_dir: Path, *, skill_name: str) -> dict[str, Any]:
     runs = collect_runs(previous_dir)
-    feedback = load_feedback(previous_dir)
+    feedback = load_feedback(previous_dir, skill_name=skill_name)
     return {
         "iteration": previous_dir.name,
         "runs": {
@@ -306,15 +323,10 @@ def _eval_directories(iteration_dir: Path) -> list[Path]:
 
 
 def _eval_directory_key(path: Path) -> tuple[int, int, str]:
-    suffix = path.name.removeprefix("eval-")
+    suffix = eval_id_from_directory(path)
     if suffix.isdigit():
         return (0, int(suffix), "")
     return (1, 0, suffix)
-
-
-def _eval_id_from_directory(eval_dir: Path) -> str:
-    suffix = eval_dir.name.removeprefix("eval-")
-    return suffix or "unknown"
 
 
 def _embed_outputs(outputs_dir: Path) -> list[dict[str, Any]]:

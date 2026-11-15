@@ -124,6 +124,11 @@
   .run-item:hover { background: #f7f5ef; border-color: var(--border); }
   .run-item.selected { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
   .run-item .run-name { display: block; font-weight: 650; font-size: 0.86rem; }
+  .run-item.reviewed .run-name::after {
+    content: " \2713";
+    color: var(--good);
+    font-size: 0.72rem;
+  }
   .run-item .run-id { display: block; margin-top: 0.15rem; color: var(--muted); font-family: var(--mono); font-size: 0.7rem; word-break: break-word; }
   .run-item .run-badges { display: flex; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.4rem; }
   .badge {
@@ -310,6 +315,9 @@ function rateBand(rate) {
   return "mixed";
 }
 
+const BAND_BADGE = { good: "good", bad: "bad", mixed: "" };
+const BAND_DELTA = { good: "delta-positive", bad: "delta-negative", mixed: "" };
+
 function setStatus(message) {
   document.getElementById("feedback-status").textContent = message;
 }
@@ -328,8 +336,7 @@ function gradeBadge(run) {
   if (!total) return "";
   const rate = Number(summary.pass_rate);
   const display = Number.isFinite(rate) ? Math.round(rate * 100) + "%" : "graded";
-  const band = rateBand(rate);
-  const className = band === "good" ? "good" : band === "bad" ? "bad" : "";
+  const className = BAND_BADGE[rateBand(rate)];
   return '<span class="badge ' + className + '">' + escapeHtml(display) + "</span>";
 }
 
@@ -344,7 +351,10 @@ function renderRunList() {
   for (const run of RUNS) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "run-item" + (run.run_id === currentRunId ? " selected" : "") + (feedbackMap[run.run_id] ? " has-feedback" : "");
+    button.className = "run-item" +
+      (run.run_id === currentRunId ? " selected" : "") +
+      (visited.has(run.run_id) ? " reviewed" : "") +
+      (feedbackMap[run.run_id] ? " has-feedback" : "");
     button.dataset.runId = run.run_id;
     button.addEventListener("click", () => selectRun(run.run_id));
     button.innerHTML =
@@ -369,13 +379,14 @@ function updateReviewProgress() {
 function updateFeedbackDots() {
   for (const button of document.querySelectorAll(".run-item")) {
     button.classList.toggle("has-feedback", Boolean((feedbackMap[button.dataset.runId] || "").trim()));
+    button.classList.toggle("reviewed", visited.has(button.dataset.runId));
   }
   updateReviewProgress();
 }
 
-function selectRun(runId) {
+function selectRun(runId, markReviewed = true) {
   currentRunId = runId;
-  visited.add(runId);
+  if (markReviewed) visited.add(runId);
   renderRunList();
   renderDetail();
   document.getElementById("run-detail").scrollTop = 0;
@@ -449,6 +460,7 @@ function renderDetail() {
   textarea.value = feedbackMap[run.run_id] || "";
   textarea.addEventListener("input", () => {
     feedbackMap[run.run_id] = textarea.value;
+    visited.add(run.run_id);
     updateFeedbackDots();
     setStatus("Unsaved feedback");
   });
@@ -648,8 +660,7 @@ function renderBenchmark() {
     for (const run of runs) {
       const result = run.result || {};
       const rate = Number(result.pass_rate);
-      const band = rateBand(rate);
-      const rateClass = band === "good" ? "delta-positive" : band === "bad" ? "delta-negative" : "";
+      const rateClass = BAND_DELTA[rateBand(rate)];
       const rateText = Number.isFinite(rate) ? Math.round(rate * 100) + "%" : "\u2014";
       html += "<tr><td>" + escapeHtml(run.eval_name || ("Eval " + run.eval_id)) + "</td>" +
         "<td>" + escapeHtml(armLabel(run.configuration)) + "</td>" +
@@ -691,7 +702,7 @@ function init() {
 
   renderRunList();
   if (RUNS.length) {
-    selectRun(RUNS[0].run_id);
+    selectRun(RUNS[0].run_id, false);
   }
   renderBenchmark();
 }

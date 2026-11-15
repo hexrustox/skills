@@ -518,11 +518,11 @@ Human review returned by the static page. Located at `<iteration>/feedback.json`
 
 **Fields:**
 
-- `skill_name`: the skill under review.
+- `skill_name`: the skill under review. A file whose `skill_name` names a different skill is rejected by the review page.
 - `iteration`: the iteration directory name the feedback applies to. A file whose `iteration` names a different directory is rejected by the review page.
 - `reviews[]`: one entry per run the reviewer opened.
   - `run_id`: the stable `eval-<ID>-<arm>` identity. Match on this, not on directory order.
-  - `feedback`: freeform reviewer text. An empty string means the reviewer opened the run and requested no change.
+  - `feedback`: freeform reviewer text. An empty string means the reviewer opened the run and requested no change. Non-empty feedback also marks the run reviewed when `reviewed` is absent.
   - `reviewed`: `true` once the reviewer opens the run. The page writes it so an empty review survives a page reload.
 - `notes`: optional cross-run feedback.
 

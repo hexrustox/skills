@@ -124,6 +124,15 @@ def eval_directory(iteration_dir: Path, eval_id: int | str) -> Path:
     return Path(iteration_dir) / f"eval-{validate_eval_id(eval_id)}"
 
 
+def eval_id_from_directory(eval_dir: Path) -> str:
+    """Return the eval ID encoded in an ``eval-<ID>`` directory name."""
+    name = Path(eval_dir).name
+    suffix = name.removeprefix("eval-")
+    if suffix == name or not suffix:
+        raise ValueError(f"{str(eval_dir)!r} is not an eval directory")
+    return suffix
+
+
 def validate_arm(arm: str) -> str:
     """Return ``arm`` if it is one of the canonical arm names."""
     if arm not in ARMS:

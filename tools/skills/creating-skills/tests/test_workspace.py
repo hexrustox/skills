@@ -8,6 +8,7 @@ from scripts.workspace import (
     create_iteration,
     default_workspace,
     eval_directory,
+    eval_id_from_directory,
     iteration_number,
     preserve_inputs,
     resolve_inputs,
@@ -96,6 +97,17 @@ class WorkspaceLayoutTests(unittest.TestCase):
     def test_eval_directory_rejects_an_unsafe_id(self) -> None:
         with self.assertRaisesRegex(ValueError, "directory name"):
             eval_directory(self.root, "../escape")
+
+    def test_eval_id_round_trips_through_the_directory_name(self) -> None:
+        iteration = self.workspace / "iteration-1"
+
+        self.assertEqual(
+            eval_id_from_directory(eval_directory(iteration, "ocean")), "ocean"
+        )
+
+    def test_eval_id_from_directory_rejects_a_non_eval_name(self) -> None:
+        with self.assertRaisesRegex(ValueError, "not an eval directory"):
+            eval_id_from_directory(self.root / "inputs")
 
     def test_run_id_combines_the_eval_and_arm(self) -> None:
         self.assertEqual(run_id(1, "with_skill"), "eval-1-with_skill")

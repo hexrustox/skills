@@ -97,12 +97,13 @@ class ReviewPageTests(unittest.TestCase):
         *,
         notes: str = "",
         iteration_name: str | None = None,
+        skill_name: str | None = None,
     ) -> Path:
         path = iteration / "feedback.json"
         path.write_text(
             json.dumps(
                 {
-                    "skill_name": _SKILL_NAME,
+                    "skill_name": skill_name or _SKILL_NAME,
                     "iteration": iteration_name or iteration.name,
                     "reviews": [
                         {"run_id": run_id, "feedback": feedback, "reviewed": True}
@@ -228,6 +229,18 @@ class ReviewPageTests(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(ValueError, "iteration-1"):
+            write_review(iteration)
+
+    def test_feedback_for_a_different_skill_is_rejected(self) -> None:
+        iteration = self.workspace / "iteration-2"
+        self.write_run(iteration, eval_id=1)
+        self.write_feedback(
+            iteration,
+            {"eval-1-with_skill": "Wrong skill."},
+            skill_name="other-skill",
+        )
+
+        with self.assertRaisesRegex(ValueError, "other-skill"):
             write_review(iteration)
 
     def test_stable_identity_comes_from_the_eval_directory(self) -> None:
