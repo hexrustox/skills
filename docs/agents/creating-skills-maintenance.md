@@ -31,7 +31,8 @@ The port keeps the upstream authoring and improvement loop but removes or rewrit
 - Added the OpenCode adapter at `tools/skills/creating-skills/scripts/adapters/opencode.py`, with its documentation and index under `tools/skills/creating-skills/references/harnesses/`.
 - Added the canonical eval workspace and single-case runner in `tools/skills/creating-skills/scripts/workspace.py` and `tools/skills/creating-skills/scripts/eval_case.py`, documented in `tools/skills/creating-skills/references/evals.md`.
 - Added the batch runner in `tools/skills/creating-skills/scripts/eval_batch.py` with its tests. It creates one iteration, prepares metadata and inputs before dispatch, runs every case's with-skill and baseline arms in parallel, aliases an `old_skill` snapshot to the live skill's name, and writes `error.json` for setup failures instead of stopping the batch.
-- Eval, benchmark, and description-tuning operations go through a harness adapter rather than hardcoded commands.
+- Added harness-neutral grader, comparator, and analyzer instructions under `tools/skills/creating-skills/agents/`, plus the JSON contract reference at `tools/skills/creating-skills/references/schemas.md`. Grading, blind comparison, and analysis run as fresh-context instructions; the unused `history.json` schema was dropped.
+- Eval, grading, comparison, analysis, benchmark, and description-tuning operations go through a harness adapter rather than hardcoded commands.
 
 ## Diffing an upstream update
 
@@ -53,7 +54,7 @@ The port keeps the upstream authoring and improvement loop but removes or rewrit
    diff -u .agents/skills/skill-creator/SKILL.md tools/skills/creating-skills/SKILL.md
    ```
 
-   Repeat for any changed reference or script. The diff will be noisy because the port intentionally renames the skill, rewrites prose, and drops packaging and harness-specific material. Read it for upstream ideas, not as a literal patch.
+   Repeat for any changed reference, agent instruction, or script. The diff will be noisy because the port intentionally renames the skill, rewrites prose, and drops packaging and harness-specific material. Read it for upstream ideas, not as a literal patch.
 
 4. Port only changes that preserve harness neutrality: keep the authoring and improvement logic, and leave packaging, archive, presentation, and harness-specific sections in upstream. If an upstream change is useful but harness-specific, put it in the adapter documentation instead of the neutral core.
 

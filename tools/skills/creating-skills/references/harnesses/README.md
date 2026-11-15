@@ -1,6 +1,6 @@
 # Harness adapters
 
-Eval, benchmark, and description-tuning work runs through a harness adapter. Read the document for your harness before starting:
+Eval, grading, comparison, analysis, benchmark, and description-tuning work runs through a harness adapter. Read the document for your harness before starting:
 
 - [OpenCode](opencode.md) — tested against OpenCode 2.2.1.
 

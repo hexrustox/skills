@@ -2,7 +2,7 @@
 name: creating-skills
 description: Creates, edits, evaluates, benchmarks, and tunes the description of agent skills. Use when the user wants to create a skill from scratch or from a conversation, turn a workflow or completed task into a skill, improve or review an existing skill, write or critique a SKILL.md, set up skill evals or benchmarks, compare with-skill and baseline runs, or optimize a skill description for better triggering.
 license: Apache-2.0
-compatibility: Requires Python 3.11+ and a harness adapter for eval, benchmark, and description-tuning workflows.
+compatibility: Requires Python 3.11+ and a harness adapter for eval, grading, comparison, analysis, benchmark, and description-tuning workflows.
 ---
 
 # Creating Skills
@@ -98,9 +98,9 @@ Structure the skill so the agent reads only what the current task needs:
 
 1. **Metadata** — name and description, loaded for every skill at startup.
 2. **Instructions** — the `SKILL.md` body, loaded on activation. Keep it under about 500 lines.
-3. **Resources** — `references/`, `scripts/`, and `assets/`, loaded only when needed.
+3. **Resources** — `references/`, `scripts/`, `assets/`, and agent instructions under `agents/`, loaded only when needed.
 
-Move branch-specific detail into `references/` and state the condition for reading each file next to the pointer. For files longer than about 300 lines, add a table of contents. Use `scripts/` for deterministic work the agent would otherwise rebuild each run, and `assets/` for templates, images, or data used in output. Reference files from `SKILL.md` with paths relative to the skill root.
+Move branch-specific detail into `references/` and state the condition for reading each file next to the pointer. For files longer than about 300 lines, add a table of contents. Use `scripts/` for deterministic work the agent would otherwise rebuild each run, and `assets/` for templates, images, or data used in output. The `agents/` directory holds instructions to pass to fresh-context runs; read the relevant file when grading, comparing, or analyzing. Reference files from `SKILL.md` with paths relative to the skill root.
 
 ## Use writing patterns
 
@@ -121,7 +121,7 @@ Done when the skill still describes one coherent unit of work and every pointer 
 
 ## Test, review, and improve
 
-Before eval work, read the [harness adapter index](references/harnesses/README.md).
+Before eval, grading, comparison, or analysis work, read the [harness adapter index](references/harnesses/README.md). When writing or checking the resulting JSON, follow [the JSON contracts](references/schemas.md).
 
 The loop is: draft, run realistic cases with and without the skill, review the outputs, improve the skill, and repeat.
 
@@ -129,7 +129,7 @@ The loop is: draft, run realistic cases with and without the skill, review the o
 2. **Run with-skill and baseline arms in fresh contexts.** Run the batch command in [the eval workspace reference](references/evals.md); it launches every case's with-skill and baseline arms together. For a new skill the baseline has no skill; for an existing skill pass a snapshot of the previous version taken before edits. Both baseline scopes should deny other skills so ambient skills do not contaminate the result.
 3. **Capture the evidence.** Save outputs, transcripts, timing, and token totals under the canonical workspace. The default workspace is `<skill-name>-workspace/` beside the skill directory, organized as `iteration-<N>/eval-<ID>/<arm>/`. The batch writes the layout, metadata, inputs, outputs, transcripts, timing, and normalized run metadata, then prints the iteration directory.
 4. **Draft assertions while runs are in progress.** The batch writes `eval_metadata.json` with empty expectations before launching any run. While the arms execute, edit `expectations` in each `<iteration>/eval-<ID>/eval_metadata.json`; existing metadata is never overwritten. Make them objectively verifiable and name them so a reviewer understands what passed. Subjective qualities such as writing style belong in human review, not forced assertions.
-5. **Grade with evidence.** Record `text`, `passed`, and `evidence` for each assertion. Prefer a script for anything that can be checked programmatically.
+5. **Grade in a fresh context.** Start a fresh-context run with [the grader instructions](agents/grader.md), the eval prompt and expectations from `eval_metadata.json`, the arm's `transcript.md`, and its `outputs/`. Write the result to `<arm>/grading.json` with `expectations` entries using `text`, `passed`, and `evidence`. Prefer a script for anything that can be checked programmatically. The grader copies derived execution metrics from `outputs/metrics.json`, copies timing from `timing.json`, and summarizes any optional `outputs/user_notes.md`. Read its optional `eval_feedback` and fix assertions that would pass for a wrong output before the next iteration.
 6. **Show the review before judging it yourself.** Generate the static review page from the normalized run data and ask the human to review outputs, grades, and previous feedback.
 7. **Improve from the feedback and repeat.** Use a new iteration directory and keep the previous run identity stable so feedback and outputs can be matched across iterations.
 
@@ -144,3 +144,9 @@ The test cases are a small sample of how the skill will be used. Improve the ski
 - **Check the description too.** If the skill works once loaded but does not trigger, revise the description rather than adding more body text.
 
 Stop when the user is satisfied, the feedback is empty, or another iteration is not making meaningful progress.
+
+## Blind comparison
+
+Use a blind comparison when close versions need a more rigorous judgment than the review page provides. It is optional and requires fresh-context runs. Read [the eval workspace reference](references/evals.md#compare-two-outputs-blindly) for the procedure, then use [the comparator instructions](agents/comparator.md) and [the analyzer instructions](agents/analyzer.md). A tie ends the comparison; there is no winner for the analyzer to explain.
+
+Most comparisons do not need this step. The human review loop is usually enough.

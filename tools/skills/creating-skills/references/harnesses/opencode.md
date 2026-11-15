@@ -62,6 +62,23 @@ The subprocess runs with the scope as both its working directory and its `PWD`. 
 
 A timeout kills the process and returns the partial run with `timed_out=True` and a non-zero exit code.
 
+## Fresh-context instruction runs
+
+Grading, blind comparison, and analysis use the instruction files under `agents/`, not the eval runners. Start each as its own `opencode run`. No `--continue` or `--session` is passed, so the run gets a fresh session.
+
+Pass the instruction file's contents as the prompt, or attach it with `--file` and tell the agent to follow it. Include absolute paths for every input and output. For example:
+
+```bash
+opencode run --format json --agent build --auto \
+  --file /abs/path/to/creating-skills/agents/grader.md \
+  "Follow the attached grader instructions. eval_prompt: <the eval prompt>; expectations: <expectation 1>; <expectation 2>; transcript_path: /abs/path/to/eval-1/with_skill/transcript.md; outputs_dir: /abs/path/to/eval-1/with_skill/outputs; output_path: /abs/path/to/eval-1/with_skill/grading.json"
+```
+
+- Run from a scratch directory, not from an active session and not from the project under test. Grading, comparison, and analysis do not need a skill scope.
+- The fresh agent writes the output file at `output_path`. If its scope cannot write that absolute path, ask it to return the JSON and write the file yourself.
+- For a comparison, stage neutral A/B copies before starting and keep arm names out of the prompt and paths. The comparator must not be able to infer which arm produced which output.
+- The run's JSONL stream is the transcript of the grading run itself. The result that matters is the JSON file it writes.
+
 ## JSONL events
 
 `--format json` writes one JSON object per line. The adapter expects these event types:
