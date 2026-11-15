@@ -30,6 +30,7 @@ The port keeps the upstream authoring and improvement loop but removes or rewrit
 - Added the `Harness` protocol and normalized run results in `tools/skills/creating-skills/scripts/harness.py`, plus a name-keyed adapter registry in `tools/skills/creating-skills/scripts/adapters/`.
 - Added the OpenCode adapter at `tools/skills/creating-skills/scripts/adapters/opencode.py`, with its documentation and index under `tools/skills/creating-skills/references/harnesses/`.
 - Added the canonical eval workspace and single-case runner in `tools/skills/creating-skills/scripts/workspace.py` and `tools/skills/creating-skills/scripts/eval_case.py`, documented in `tools/skills/creating-skills/references/evals.md`.
+- Added the batch runner in `tools/skills/creating-skills/scripts/eval_batch.py` with its tests. It creates one iteration, prepares metadata and inputs before dispatch, runs every case's with-skill and baseline arms in parallel, aliases an `old_skill` snapshot to the live skill's name, and writes `error.json` for setup failures instead of stopping the batch.
 - Eval, benchmark, and description-tuning operations go through a harness adapter rather than hardcoded commands.
 
 ## Diffing an upstream update

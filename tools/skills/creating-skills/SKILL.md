@@ -110,7 +110,7 @@ Read [the writing patterns](references/writing-patterns.md) when drafting or rev
 
 When the user is improving a skill rather than creating one:
 
-1. Snapshot the current skill before editing it if evals will compare against the old version.
+1. Snapshot the current skill before editing it if evals will compare against the old version. Put it at `<skill-name>-workspace/skill-snapshot/` and pass it with `--baseline-skill`.
 2. Keep the original name, directory, and frontmatter name. Do not rename the skill to signal a version.
 3. Read the whole skill, including references and scripts, before changing one part.
 4. Make the smallest coherent change that addresses the feedback.
@@ -126,9 +126,9 @@ Before eval work, read the [harness adapter index](references/harnesses/README.m
 The loop is: draft, run realistic cases with and without the skill, review the outputs, improve the skill, and repeat.
 
 1. **Write 2–3 realistic test prompts.** Use something a real user would type, including input files and the expected output. Save them with the skill, for example under `evals/`.
-2. **Run with-skill and baseline arms in fresh contexts.** Launch them together. For a new skill the baseline has no skill; for an existing skill the baseline is a snapshot of the previous version. Both baseline scopes should deny other skills so ambient skills do not contaminate the result.
-3. **Capture the evidence.** Save outputs, transcripts, timing, and token totals under the canonical workspace. The default workspace is `<skill-name>-workspace/` beside the skill directory, organized as `iteration-<N>/eval-<ID>/<arm>/`. Run one case with the command in [the eval workspace reference](references/evals.md); it writes the layout, metadata, and artifacts for you.
-4. **Draft assertions while runs are in progress.** Make them objectively verifiable and name them so a reviewer understands what passed. Subjective qualities such as writing style belong in human review, not forced assertions.
+2. **Run with-skill and baseline arms in fresh contexts.** Run the batch command in [the eval workspace reference](references/evals.md); it launches every case's with-skill and baseline arms together. For a new skill the baseline has no skill; for an existing skill pass a snapshot of the previous version taken before edits. Both baseline scopes should deny other skills so ambient skills do not contaminate the result.
+3. **Capture the evidence.** Save outputs, transcripts, timing, and token totals under the canonical workspace. The default workspace is `<skill-name>-workspace/` beside the skill directory, organized as `iteration-<N>/eval-<ID>/<arm>/`. The batch writes the layout, metadata, inputs, outputs, transcripts, timing, and normalized run metadata, then prints the iteration directory.
+4. **Draft assertions while runs are in progress.** The batch writes `eval_metadata.json` with empty expectations before launching any run. While the arms execute, edit `expectations` in each `<iteration>/eval-<ID>/eval_metadata.json`; existing metadata is never overwritten. Make them objectively verifiable and name them so a reviewer understands what passed. Subjective qualities such as writing style belong in human review, not forced assertions.
 5. **Grade with evidence.** Record `text`, `passed`, and `evidence` for each assertion. Prefer a script for anything that can be checked programmatically.
 6. **Show the review before judging it yourself.** Generate the static review page from the normalized run data and ask the human to review outputs, grades, and previous feedback.
 7. **Improve from the feedback and repeat.** Use a new iteration directory and keep the previous run identity stable so feedback and outputs can be matched across iterations.

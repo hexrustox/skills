@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -549,4 +550,28 @@ class OpenCodeRunCaseTests(unittest.TestCase):
         self.assertEqual(
             invocation["permissions"],
             [{"action": "skill", "resource": "*", "effect": "deny"}],
+        )
+
+    def test_old_skill_denies_every_other_skill(self) -> None:
+        baseline = self.root / "snapshots" / "example-skill"
+        baseline.parent.mkdir(parents=True)
+        shutil.copytree(self.skill, baseline)
+        self.fake.configure(stdout_file=str(fixture("normalized.jsonl")))
+
+        run_case(
+            self.harness,
+            self.skill,
+            self.case,
+            "old_skill",
+            baseline_skill=baseline,
+        )
+
+        invocation = self.fake.invocation()
+        self.assertEqual(invocation["skills"], ["example-skill"])
+        self.assertEqual(
+            invocation["permissions"],
+            [
+                {"action": "skill", "resource": "*", "effect": "deny"},
+                {"action": "skill", "resource": "example-skill", "effect": "allow"},
+            ],
         )

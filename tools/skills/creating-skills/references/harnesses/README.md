@@ -9,3 +9,5 @@ If your harness is not listed, stop and ask the user to add an adapter.
 ## Adding another harness
 
 Implement the `Harness` protocol in `scripts/harness.py`, register the adapter in `scripts/adapters/__init__.py`, and add a sibling document linked from this index. Keep the normalized result values identical so callers can rely on them. Adapter tests use canned streams or a fake executable and never call a live model.
+
+A single adapter instance may be used for concurrent `prepare_scope` and `run` calls. Keep per-run state on the prepared scope or in locals, never in mutable attributes on the adapter.

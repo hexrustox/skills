@@ -53,7 +53,7 @@ class CaseRun:
 
 def load_evals(skill_path: Path) -> tuple[EvalCase, ...]:
     """Load and validate the eval definitions for ``skill_path``."""
-    skill_path = _validate_skill(skill_path)
+    skill_path = validate_skill(skill_path)
     path = skill_path / "evals" / "evals.json"
     if not path.is_file():
         raise FileNotFoundError(f"no eval definition at {str(path)!r}")
@@ -136,7 +136,7 @@ def run_case(
     consume an iteration number.
     """
     validate_arm(arm)
-    skill_path = _validate_skill(skill_path)
+    skill_path = validate_skill(skill_path)
     skills = _scope_skills(arm, skill_path, baseline_skill)
     input_sources = resolve_inputs(skill_path, case.files)
     identity = run_id(case.eval_id, arm)
@@ -191,7 +191,7 @@ def _scope_skills(
         return ()
     if baseline_skill is None:
         raise ValueError("the old_skill arm requires a baseline skill")
-    return (_validate_skill(baseline_skill),)
+    return (validate_skill(baseline_skill),)
 
 
 def _string_list(value: Any, label: str) -> tuple[str, ...]:
@@ -205,7 +205,7 @@ def _string_list(value: Any, label: str) -> tuple[str, ...]:
     return tuple(items)
 
 
-def _validate_skill(skill_path: Path) -> Path:
+def validate_skill(skill_path: Path) -> Path:
     path = Path(skill_path).resolve()
     if not (path / "SKILL.md").is_file():
         raise ValueError(f"skill directory {str(path)!r} does not contain SKILL.md")
@@ -227,7 +227,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        skill_path = _validate_skill(args.skill)
+        skill_path = validate_skill(args.skill)
         case = find_eval(load_evals(skill_path), args.eval_id)
         iteration_dir = None
         if args.iteration is not None:

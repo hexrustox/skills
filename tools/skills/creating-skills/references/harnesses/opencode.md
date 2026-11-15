@@ -115,6 +115,7 @@ Each probe uses a fresh candidate name and a fresh scope, so ambient skills cann
 
 ## Limits
 
+- A parallel eval batch uses one adapter instance and one temporary scope per run, but the runs share the background OpenCode service. Construct `OpenCodeHarness(standalone=True)` when a private server per run matters more than startup cost.
 - Managed system configuration can hard-deny skills or outrank project permission rules. The adapter cannot override that.
 - A trigger probe cleans its scope before returning, so `run.output_files` paths from a probe no longer exist. Use the transcript when debugging a probe.
 - Early termination after the first trigger observation, repeated probe runs, and trigger-rate reporting are the caller's responsibility.

@@ -87,7 +87,12 @@ class TriggerResult:
 
 @runtime_checkable
 class Harness(Protocol):
-    """The three capabilities the creating-skills scripts require."""
+    """The three capabilities the creating-skills scripts require.
+
+    One harness instance may be used for concurrent ``prepare_scope`` and
+    ``run`` calls. Adapters must keep per-run state on the prepared scope or
+    in locals, never in mutable attributes on the adapter.
+    """
 
     def prepare_scope(self, skills: Sequence[Path] = ()) -> PreparedScope:
         """Create a fresh scope containing exactly ``skills`` or no skill."""
