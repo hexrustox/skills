@@ -1,10 +1,16 @@
 ## Skill authoring
 
-User-facing skills live under `skills/`. Development-tooling skills live under `tools/skills/`.
+Load the `creating-skills` skill before creating or editing a skill.
 
-Load the `creating-skills` skill before creating or editing a skill. Vendored third-party skills live under `.agents/skills/` and are pinned in `skills-lock.json`; do not edit them. `opencode.json` adds `tools/skills` as a project skill source and hides the vendored `skill-creator` from model invocation, so `creating-skills` is the authoring workflow advertised from that source. OpenCode resolves the source from the working directory, so launch sessions at the repository root.
+- User-facing skills live under `skills/<name>/`.
+- Development-tooling skills live under `tools/skills/<name>/`.
+- Vendored third-party skills live under `.agents/skills/` and are pinned in `skills-lock.json`; do not edit them.
 
-Generated eval workspaces (`<skill-name>-workspace/`) are ignored by git.
+OpenCode exposes `tools/skills` as a project skill source and hides the vendored `skill-creator` from model invocation; launch sessions at the repository root so the source resolves.
+
+### Maintaining the `creating-skills` port
+
+Read `docs/agents/creating-skills-maintenance.md` before syncing upstream or updating the port's provenance, pinned commit, or lock hash.
 
 ## Agent skills
 

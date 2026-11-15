@@ -11,13 +11,9 @@ A skill is a directory with a `SKILL.md` at its root. It gives an agent a reusab
 
 This skill covers the authoring and improvement loop. It is harness-neutral: starting fresh agents, loading a skill into a scope, and reading a harness's transcripts are adapter responsibilities. Eval, benchmark, and description-tuning workflows require an adapter. If the current harness has no adapter, stop before those workflows and ask the user for one instead of substituting harness-specific commands.
 
-## Find the skill's home
+## Before writing
 
-- **User-facing skills** live under `skills/<name>/`.
-- **Development-tooling skills** live under `tools/skills/<name>/`.
-- **Vendored third-party skills** live under `.agents/skills/`. Do not edit them; update them through the skills lock.
-
-Before writing, read any skill being changed end to end, including its references and scripts. For a new skill, confirm the name and location with the user if the repository does not make it obvious.
+Read any skill being changed end to end, including its references and scripts. For a new skill, confirm the name and location with the user if the repository does not make it obvious.
 
 Done when you know the skill's directory, whether it is new or an update, and which files it must ship with.
 
@@ -120,7 +116,6 @@ When the user is improving a skill rather than creating one:
 4. Make the smallest coherent change that addresses the feedback.
 5. Update the description if the skill's scope or triggers changed.
 6. Remove dead pointers and keep references, scripts, and frontmatter consistent.
-7. Keep the license and upstream provenance intact.
 
 Done when the skill still describes one coherent unit of work and every pointer resolves.
 
@@ -130,7 +125,7 @@ The loop is: draft, run realistic cases with and without the skill, review the o
 
 1. **Write 2–3 realistic test prompts.** Use something a real user would type, including input files and the expected output. Save them with the skill, for example under `evals/`.
 2. **Run with-skill and baseline arms in fresh contexts.** Launch them together. For a new skill the baseline has no skill; for an existing skill the baseline is a snapshot of the previous version. Both baseline scopes should deny other skills so ambient skills do not contaminate the result.
-3. **Capture the evidence.** Save outputs, transcripts, timing, and token totals under the canonical workspace. The default workspace is `<skill-name>-workspace/` beside the skill directory, organized as `iteration-<N>/eval-<ID>/<arm>/`. Do not commit it.
+3. **Capture the evidence.** Save outputs, transcripts, timing, and token totals under the canonical workspace. The default workspace is `<skill-name>-workspace/` beside the skill directory, organized as `iteration-<N>/eval-<ID>/<arm>/`.
 4. **Draft assertions while runs are in progress.** Make them objectively verifiable and name them so a reviewer understands what passed. Subjective qualities such as writing style belong in human review, not forced assertions.
 5. **Grade with evidence.** Record `text`, `passed`, and `evidence` for each assertion. Prefer a script for anything that can be checked programmatically.
 6. **Show the review before judging it yourself.** Generate the static review page from the normalized run data and ask the human to review outputs, grades, and previous feedback.
@@ -149,7 +144,3 @@ The test cases are a small sample of how the skill will be used. Improve the ski
 - **Check the description too.** If the skill works once loaded but does not trigger, revise the description rather than adding more body text.
 
 Stop when the user is satisfied, the feedback is empty, or another iteration is not making meaningful progress.
-
-## Provenance
-
-This skill is a harness-neutral port of the `skill-creator` skill from `anthropics/skills`. The vendored upstream copy, the pinned commit, the lock hash, and the procedure for diffing future upstream updates are recorded in [the upstream note](references/upstream.md). Do not edit the vendored copy directly.

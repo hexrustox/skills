@@ -1,6 +1,8 @@
-# Upstream provenance
+# Maintaining creating-skills
 
-This skill is a harness-neutral adaptation of the `skill-creator` skill from the upstream `anthropics/skills` repository.
+Maintenance notes for `tools/skills/creating-skills`. This file is not part of the skill.
+
+The port is a harness-neutral adaptation of the `skill-creator` skill from the upstream `anthropics/skills` repository.
 
 | Field | Value |
 | --- | --- |
@@ -11,9 +13,9 @@ This skill is a harness-neutral adaptation of the `skill-creator` skill from the
 | Lock entry | `skills-lock.json` → `skill-creator` |
 | Lock `computedHash` | `5ea13a6d9f0d4bb694405d79acd00cadec0d21bb138c4dd10fcf3c500cb835c2` |
 | Port location | `tools/skills/creating-skills` |
-| License | Apache-2.0; see `../LICENSE.txt` (copied unchanged from upstream) |
+| License | Apache-2.0; see `tools/skills/creating-skills/LICENSE.txt` (copied unchanged from upstream) |
 
-The vendored snapshot is the upstream reference used for future diffs. Keep it untouched; update it through the skills lock rather than editing files in place.
+The vendored snapshot is the upstream reference used for future diffs.
 
 ## Port changes
 
@@ -21,7 +23,7 @@ The port keeps the upstream authoring and improvement loop but removes or rewrit
 
 - Renamed the skill to `creating-skills` and aligned the directory and frontmatter name.
 - Rewrote instructions in harness-neutral language: "the agent", "fresh-context run", and "harness adapter".
-- Moved authoring detail into `references/writing-patterns.md`.
+- Moved authoring detail into `tools/skills/creating-skills/references/writing-patterns.md`.
 - Removed packaging, archive creation, file-presentation steps, and harness-specific review instructions.
 - Did not port the upstream validator or packaging script.
 - Eval, benchmark, and description-tuning operations go through a harness adapter rather than hardcoded commands.
@@ -48,11 +50,13 @@ The port keeps the upstream authoring and improvement loop but removes or rewrit
 
    Repeat for any changed reference or script. The diff will be noisy because the port intentionally renames the skill, rewrites prose, and drops packaging and harness-specific material. Read it for upstream ideas, not as a literal patch.
 
-4. Port only changes that preserve harness neutrality. Do not copy packaging, archive, presentation, or harness-specific sections. If an upstream change is useful but harness-specific, put it in the adapter documentation instead of the neutral core.
+4. Port only changes that preserve harness neutrality: keep the authoring and improvement logic, and leave packaging, archive, presentation, and harness-specific sections in upstream. If an upstream change is useful but harness-specific, put it in the adapter documentation instead of the neutral core.
 
 5. Update the pinned commit and `computedHash` in the table above to match the new snapshot.
 
-6. Run the skill's content audit and tests, then manually confirm the vendored skill is still readable and still hidden from model invocation.
+6. Re-read the updated port, check every relative file reference resolves, and confirm `opencode.json` still denies the vendored `skill-creator`.
+
+Done when the port reflects the upstream changes worth taking, every reference resolves, and the pinned commit and `computedHash` match the new snapshot.
 
 ## Updating the pinned hash
 
