@@ -127,7 +127,7 @@ The loop is: draft, run realistic cases with and without the skill, review the o
 
 1. **Write 2–3 realistic test prompts.** Use something a real user would type, including input files and the expected output. Save them with the skill, for example under `evals/`.
 2. **Run with-skill and baseline arms in fresh contexts.** Launch them together. For a new skill the baseline has no skill; for an existing skill the baseline is a snapshot of the previous version. Both baseline scopes should deny other skills so ambient skills do not contaminate the result.
-3. **Capture the evidence.** Save outputs, transcripts, timing, and token totals under the canonical workspace. The default workspace is `<skill-name>-workspace/` beside the skill directory, organized as `iteration-<N>/eval-<ID>/<arm>/`.
+3. **Capture the evidence.** Save outputs, transcripts, timing, and token totals under the canonical workspace. The default workspace is `<skill-name>-workspace/` beside the skill directory, organized as `iteration-<N>/eval-<ID>/<arm>/`. Run one case with the command in [the eval workspace reference](references/evals.md); it writes the layout, metadata, and artifacts for you.
 4. **Draft assertions while runs are in progress.** Make them objectively verifiable and name them so a reviewer understands what passed. Subjective qualities such as writing style belong in human review, not forced assertions.
 5. **Grade with evidence.** Record `text`, `passed`, and `evidence` for each assertion. Prefer a script for anything that can be checked programmatically.
 6. **Show the review before judging it yourself.** Generate the static review page from the normalized run data and ask the human to review outputs, grades, and previous feedback.

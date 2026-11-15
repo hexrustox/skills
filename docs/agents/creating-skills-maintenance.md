@@ -29,6 +29,7 @@ The port keeps the upstream authoring and improvement loop but removes or rewrit
 - Replaced the upstream `scripts/utils.py` parser with a standard-library `tools/skills/creating-skills/scripts/frontmatter.py` module and added a `unittest` suite under `tools/skills/creating-skills/tests/`.
 - Added the `Harness` protocol and normalized run results in `tools/skills/creating-skills/scripts/harness.py`, plus a name-keyed adapter registry in `tools/skills/creating-skills/scripts/adapters/`.
 - Added the OpenCode adapter at `tools/skills/creating-skills/scripts/adapters/opencode.py`, with its documentation and index under `tools/skills/creating-skills/references/harnesses/`.
+- Added the canonical eval workspace and single-case runner in `tools/skills/creating-skills/scripts/workspace.py` and `tools/skills/creating-skills/scripts/eval_case.py`, documented in `tools/skills/creating-skills/references/evals.md`.
 - Eval, benchmark, and description-tuning operations go through a harness adapter rather than hardcoded commands.
 
 ## Diffing an upstream update
