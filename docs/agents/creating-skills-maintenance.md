@@ -26,6 +26,7 @@ The port keeps the upstream authoring and improvement loop but removes or rewrit
 - Moved authoring detail into `tools/skills/creating-skills/references/writing-patterns.md`.
 - Removed packaging, archive creation, file-presentation steps, and harness-specific review instructions.
 - Did not port the upstream validator or packaging script.
+- Replaced the upstream `scripts/utils.py` parser with a standard-library `scripts/frontmatter.py` module and added a `unittest` suite under `tests/`.
 - Eval, benchmark, and description-tuning operations go through a harness adapter rather than hardcoded commands.
 
 ## Diffing an upstream update
