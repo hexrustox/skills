@@ -5,9 +5,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-_BLOCK_SCALAR_INDICATORS = frozenset({">", ">-", ">+", "|", "|-", "|+"})
-_TOP_LEVEL_ENTRY = re.compile(r"([A-Za-z0-9_-]+):(?:[ \t]*(.*))?")
-_UNQUOTED_COMMENT = re.compile(r"[ \t]+#")
+_BLOCK_SCALAR = re.compile(r"^[>|](?:[1-9][+-]?|[+-][1-9]?)?$")
+_TOP_LEVEL_ENTRY = re.compile(r"([A-Za-z0-9_-]+):(?:[ \t](.*))?")
+_INLINE_COMMENT = re.compile(r"[ \t]+#")
 
 
 class FrontmatterError(ValueError):
@@ -32,15 +32,11 @@ def parse_skill_md(skill_path: Path) -> SkillDocument:
     content = skill_md.read_text(encoding="utf-8")
     lines = content.splitlines()
 
-    if not lines or lines[0].removeprefix("\ufeff").strip() != "---":
+    if not lines or not _is_delimiter(lines[0]):
         raise FrontmatterError("SKILL.md must start with a '---' frontmatter delimiter")
 
     closing = next(
-        (
-            index
-            for index, line in enumerate(lines[1:], start=1)
-            if line.strip() == "---"
-        ),
+        (index for index, line in enumerate(lines[1:], start=1) if _is_delimiter(line)),
         None,
     )
     if closing is None:
@@ -65,6 +61,10 @@ def parse_skill_md(skill_path: Path) -> SkillDocument:
         )
 
     return SkillDocument(name=name, description=description, content=content)
+
+
+def _is_delimiter(line: str) -> bool:
+    return line.removeprefix("\ufeff").rstrip() == "---"
 
 
 def _parse_frontmatter(lines: list[str]) -> dict[str, str]:
@@ -99,38 +99,97 @@ def _parse_frontmatter(lines: list[str]) -> dict[str, str]:
             )
         seen.add(key)
 
-        value, index = _parse_value(lines, index + 1, match.group(2) or "", line_number)
         if key in ("name", "description"):
+            value, index = _parse_value(
+                lines, index + 1, match.group(2) or "", line_number
+            )
             fields[key] = value
+        else:
+            index = _skip_value(lines, index + 1)
 
     return fields
+
+
+def _skip_value(lines: list[str], index: int) -> int:
+    while index < len(lines):
+        line = lines[index]
+        if line and not line[0].isspace():
+            break
+        index += 1
+    return index
 
 
 def _parse_value(
     lines: list[str], index: int, raw_value: str, line_number: int
 ) -> tuple[str, int]:
-    indicator = _UNQUOTED_COMMENT.split(raw_value.strip(), maxsplit=1)[0].strip()
-    if indicator in _BLOCK_SCALAR_INDICATORS:
-        block_lines, index = _collect_indented(lines, index)
-        return " ".join(part.strip() for part in block_lines if part.strip()), index
+    scalar = _strip_inline_comment(raw_value.strip())
 
-    if indicator.startswith((">", "|")):
+    if scalar.startswith(('"', "'")):
+        quote = scalar[0]
+        if _closing_quote_index(scalar, quote) is None:
+            continuation, index = _collect_indented(lines, index)
+            scalar = _strip_inline_comment(
+                " ".join(
+                    [scalar, *(part.strip() for part in continuation if part.strip())]
+                )
+            )
+
+    if _BLOCK_SCALAR.fullmatch(scalar):
+        block_lines, index = _collect_indented(lines, index)
+        return _fold(block_lines), index
+
+    if scalar.startswith((">", "|")):
         raise FrontmatterError(
             f"SKILL.md frontmatter line {line_number} uses unsupported "
-            f"block scalar indicator {indicator!r}"
+            f"block scalar indicator {scalar!r}"
         )
 
-    if not indicator:
-        continuation, index = _collect_indented(lines, index)
-        return " ".join(part.strip() for part in continuation if part.strip()), index
+    if not scalar:
+        continuation, index = _collect_plain(lines, index)
+        return _fold(continuation), index
 
-    value = _parse_inline_value(indicator, line_number)
-    continuation, index = _collect_indented(lines, index)
-    if continuation:
-        joined = " ".join(part.strip() for part in continuation if part.strip())
-        if joined:
-            value = f"{value} {joined}"
+    value = _parse_inline_value(scalar, line_number)
+    continuation, index = _collect_plain(lines, index)
+    joined = _fold(continuation)
+    if joined:
+        value = f"{value} {joined}"
     return value, index
+
+
+def _strip_inline_comment(value: str) -> str:
+    if value.startswith('"'):
+        return _quoted_prefix(value, '"')
+    if value.startswith("'"):
+        return _quoted_prefix(value, "'")
+    if value.startswith("#"):
+        return ""
+    return _INLINE_COMMENT.split(value, maxsplit=1)[0].strip()
+
+
+def _quoted_prefix(value: str, quote: str) -> str:
+    closing = _closing_quote_index(value, quote)
+    if closing is None:
+        return value
+    remainder = value[closing + 1 :].strip()
+    if remainder and not remainder.startswith("#"):
+        return value
+    return value[: closing + 1]
+
+
+def _closing_quote_index(value: str, quote: str) -> int | None:
+    index = 1
+    while index < len(value):
+        if value[index] == "\\" and quote == '"':
+            index += 2
+            continue
+        if value[index] != quote:
+            index += 1
+            continue
+        if quote == "'" and index + 1 < len(value) and value[index + 1] == "'":
+            index += 2
+            continue
+        return index
+    return None
 
 
 def _collect_indented(lines: list[str], index: int) -> tuple[list[str], int]:
@@ -142,6 +201,15 @@ def _collect_indented(lines: list[str], index: int) -> tuple[list[str], int]:
         collected.append(line)
         index += 1
     return collected, index
+
+
+def _collect_plain(lines: list[str], index: int) -> tuple[list[str], int]:
+    collected, index = _collect_indented(lines, index)
+    return [line for line in collected if not line.strip().startswith("#")], index
+
+
+def _fold(lines: list[str]) -> str:
+    return " ".join(part.strip() for part in lines if part.strip())
 
 
 def _parse_inline_value(value: str, line_number: int) -> str:
@@ -168,4 +236,4 @@ def _parse_inline_value(value: str, line_number: int) -> str:
             f"inline value {value!r}"
         )
 
-    return _UNQUOTED_COMMENT.split(value, maxsplit=1)[0].strip()
+    return value

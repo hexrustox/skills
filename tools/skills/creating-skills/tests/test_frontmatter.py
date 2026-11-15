@@ -150,6 +150,119 @@ class ParseSkillMdTests(unittest.TestCase):
 
         self.assertEqual(skill.description, "Does example work.")
 
+    def test_preserves_hash_inside_quoted_values(self) -> None:
+        self.write_skill(
+            """
+            ---
+            name: example-skill
+            description: "Use when the user types #hashtags."
+            ---
+            """
+        )
+
+        skill = parse_skill_md(self.skill_dir)
+
+        self.assertEqual(skill.description, "Use when the user types #hashtags.")
+
+    def test_treats_a_comment_only_value_as_empty(self) -> None:
+        self.write_skill(
+            """
+            ---
+            name: example-skill
+            description: # A short note.
+              Does example work.
+            ---
+            """
+        )
+
+        skill = parse_skill_md(self.skill_dir)
+
+        self.assertEqual(skill.description, "Does example work.")
+
+    def test_ignores_indented_comments_after_a_plain_scalar(self) -> None:
+        self.write_skill(
+            """
+            ---
+            name: example-skill
+            description: Does example work.
+              # A short note.
+            ---
+            """
+        )
+
+        skill = parse_skill_md(self.skill_dir)
+
+        self.assertEqual(skill.description, "Does example work.")
+
+    def test_joins_a_quoted_multiline_description(self) -> None:
+        self.write_skill(
+            """
+            ---
+            name: example-skill
+            description: "Does the first thing
+              and then the second thing."
+            ---
+            """
+        )
+
+        skill = parse_skill_md(self.skill_dir)
+
+        self.assertEqual(
+            skill.description, "Does the first thing and then the second thing."
+        )
+
+    def test_rejects_a_missing_space_after_a_colon(self) -> None:
+        self.write_skill(
+            """
+            ---
+            name:example-skill
+            description:Does example work.
+            ---
+            """
+        )
+
+        with self.assertRaisesRegex(
+            FrontmatterError, "line 2 is not a 'key: value' entry"
+        ):
+            parse_skill_md(self.skill_dir)
+
+    def test_ignores_unrelated_inline_frontmatter(self) -> None:
+        self.write_skill(
+            """
+            ---
+            name: example-skill
+            description: Does example work.
+            allowed-tools: [Read, Grep]
+            metadata: {owner: example}
+            ---
+            """
+        )
+
+        skill = parse_skill_md(self.skill_dir)
+
+        self.assertEqual(skill.name, "example-skill")
+        self.assertEqual(skill.description, "Does example work.")
+
+    def test_does_not_close_on_an_indented_delimiter_in_a_block(self) -> None:
+        self.write_skill(
+            """
+            ---
+            name: example-skill
+            description: |
+              Does the first thing and
+              ---
+              then the second thing.
+            ---
+            """
+        )
+
+        skill = parse_skill_md(self.skill_dir)
+
+        self.assertEqual(
+            skill.description,
+            "Does the first thing and --- then the second thing.",
+        )
+
     def test_rejects_an_unsupported_inline_value(self) -> None:
         self.write_skill(
             """
@@ -275,7 +388,7 @@ class ParseSkillMdTests(unittest.TestCase):
             """
             ---
             name: example-skill
-            description: >2
+            description: >x
               Does example work.
             ---
             """
@@ -285,6 +398,24 @@ class ParseSkillMdTests(unittest.TestCase):
             FrontmatterError, "unsupported block scalar indicator"
         ):
             parse_skill_md(self.skill_dir)
+
+    def test_accepts_an_explicit_indentation_indicator(self) -> None:
+        self.write_skill(
+            """
+            ---
+            name: example-skill
+            description: |2-
+              Does the first thing and
+              then the second thing.
+            ---
+            """
+        )
+
+        skill = parse_skill_md(self.skill_dir)
+
+        self.assertEqual(
+            skill.description, "Does the first thing and then the second thing."
+        )
 
     def test_parses_the_creating_skills_skill(self) -> None:
         skill_root = Path(__file__).resolve().parents[1]

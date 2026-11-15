@@ -1,6 +1,6 @@
 # Tools
 
-Python tooling for this repo. The root `pyproject.toml` holds the shared `ruff` and `ty` dev tools. The `creating-skills` port and its standard-library test suite live under `skills/creating-skills`.
+Python tooling for this repo. `tools/pyproject.toml` holds the shared `ruff` and `ty` dev tools. The `creating-skills` port and its standard-library test suite live under `tools/skills/creating-skills`.
 
 ## Verify
 
