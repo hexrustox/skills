@@ -23,7 +23,6 @@ def get_harness(name: str, **options: Any) -> Harness:
         available = ", ".join(available_harnesses())
         raise ValueError(
             f"no harness adapter named {name!r}; available: {available}. "
-            "Add an adapter for this harness instead of substituting "
-            "harness-specific commands."
+            "Add an adapter for this harness."
         )
     return factory(**options)

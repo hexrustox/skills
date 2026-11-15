@@ -1,9 +1,11 @@
 # Harness adapters
 
-Eval, benchmark, and description-tuning work runs through a harness adapter. Read the document for the harness you are running in before starting:
+Eval, benchmark, and description-tuning work runs through a harness adapter. Read the document for your harness before starting:
 
 - [OpenCode](opencode.md) — tested against OpenCode 2.2.1.
 
-If your harness is not listed, stop and ask the user for an adapter. Do not substitute harness-specific commands or scripts.
+If your harness is not listed, stop and ask the user to add an adapter.
 
-Each adapter implements the three-capability `Harness` contract in `scripts/harness.py` and returns the same normalized run values. Add a sibling document and a registry entry when another harness is supported.
+## Adding another harness
+
+Implement the `Harness` protocol in `scripts/harness.py`, register the adapter in `scripts/adapters/__init__.py`, and add a sibling document linked from this index. Keep the normalized result values identical so callers can rely on them. Adapter tests use canned streams or a fake executable and never call a live model.

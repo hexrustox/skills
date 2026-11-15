@@ -9,7 +9,7 @@ compatibility: Requires Python 3.11+ and a harness adapter for eval, benchmark, 
 
 A skill is a directory with a `SKILL.md` at its root. It gives an agent a reusable procedure, the project-specific facts that procedure depends on, and optionally scripts and references that load only when needed.
 
-This skill covers the authoring and improvement loop. It is harness-neutral: starting fresh agents, loading a skill into a scope, and reading a harness's transcripts are adapter responsibilities. Eval, benchmark, and description-tuning workflows require an adapter. If the current harness has no adapter, stop before those workflows and ask the user for one instead of substituting harness-specific commands.
+This skill covers the authoring and improvement loop. It is harness-neutral: starting fresh agents, loading a skill into a scope, and reading a harness's transcripts are adapter responsibilities.
 
 ## Before writing
 
@@ -121,7 +121,7 @@ Done when the skill still describes one coherent unit of work and every pointer 
 
 ## Test, review, and improve
 
-Eval work requires a harness adapter. Read the adapter documentation for the current harness in [references/harnesses/](references/harnesses/README.md) and confirm it supports that harness before starting. If there is no adapter for this harness, stop and ask the user for one instead of substituting harness-specific commands.
+Before eval work, read the [harness adapter index](references/harnesses/README.md).
 
 The loop is: draft, run realistic cases with and without the skill, review the outputs, improve the skill, and repeat.
 

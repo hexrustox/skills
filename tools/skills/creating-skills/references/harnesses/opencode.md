@@ -1,28 +1,18 @@
 # OpenCode harness adapter
 
-The adapter in `scripts/adapters/opencode.py` runs fresh agents through OpenCode's non-interactive CLI. It was tested against **OpenCode 2.2.1**.
+The adapter in `scripts/adapters/opencode.py` runs fresh agents through OpenCode's non-interactive CLI.
 
 ## Contract
 
-The shared scripts depend on the `Harness` protocol in `scripts/harness.py`. It has exactly three capabilities:
+The adapter implements the `Harness` protocol in `scripts/harness.py` and returns that module's normalized `RunResult` and `TriggerResult` values.
 
-| Capability | Purpose |
-| --- | --- |
-| `prepare_scope(skills)` | Create a fresh project containing exactly the requested skills or no skill. Returns a `PreparedScope` with a `path`, `skill_ids`, and `cleanup()`. |
-| `run(scope, prompt, ...)` | Start a fresh agent in the scope and return a normalized `RunResult`. |
-| `probe_trigger(name, description, query, ...)` | Test whether a description makes an agent load a candidate skill. Returns a `TriggerResult`. |
-
-`RunResult` carries the assistant text, the raw JSONL transcript, a rendered Markdown transcript, token totals, wall-clock duration, loaded skill IDs, output file paths, exit code, stderr, derived metrics, and a timeout flag. `TriggerResult` wraps the same run and adds `triggered` and the generated candidate skill ID.
-
-Select an adapter by name:
+Select it by name:
 
 ```python
 from scripts.adapters import get_harness
 
 harness = get_harness("opencode")
 ```
-
-`get_harness` raises when the name is not registered. If the current harness has no adapter, stop and ask the user for one instead of substituting harness-specific commands.
 
 ## Scope preparation
 
@@ -48,7 +38,7 @@ The project config denies every skill and then allows only the requested IDs:
 }
 ```
 
-A no-skill scope keeps the deny-all rule and leaves `.opencode/skills` empty. This hides skills from global config, compatibility directories, and explicit skill sources instead of relying on those sources being absent. It is the permission rule, not the empty project, that guarantees the scope contains exactly the requested skill.
+A no-skill scope keeps the deny-all rule and leaves `.opencode/skills` empty. This hides skills from global config, compatibility directories, and explicit skill sources rather than relying on those sources being absent; OpenCode has no per-project switch that removes every ambient source. It is the permission rule, not the empty project, that guarantees the scope contains exactly the requested skill.
 
 ## Invocation
 
@@ -101,8 +91,8 @@ Lines that are not JSON objects are preserved in the raw transcript but ignored 
 - **Loaded skill IDs** come from `tool_use` events whose tool is `skill`; the ID is `part.state.input.id`. Duplicates are removed and first-load order is preserved.
 - **Token totals** sum every `step_finish` event. The total is `input + output + reasoning + cache.read + cache.write`, matching OpenCode's own token accounting.
 - **Duration** is wall-clock milliseconds from process start to process exit or timeout.
-- **Output files** are project files that are new or changed during the run. `.opencode/`, `.git/`, and `opencode.json` are excluded because they belong to the harness, not the agent.
-- **Metrics** use the existing execution-metric field names: `tool_calls`, `total_tool_calls`, `total_steps`, `files_created`, `errors_encountered`, `output_chars`, and `transcript_chars`. `total_steps` counts started steps, so a failed or timed-out step still appears in the count. `output_chars` reads the output files as UTF-8 with replacement, and `transcript_chars` counts the Markdown transcript.
+- **Output files** are project files that are new or changed during the run. `.opencode/`, `.git/`, and `opencode.json` are excluded because they belong to the harness, not the agent; a skill that writes into `.opencode/` will not have those files reported as outputs.
+- **Metrics** are a `RunMetrics`. `total_steps` counts started steps, so a failed or timed-out step still appears in the count. `output_chars` reads the output files as UTF-8 with replacement, and `transcript_chars` counts the Markdown transcript.
 - **Markdown transcript** renders steps, assistant text, tool inputs and results, errors, and a token/duration/exit-code summary.
 
 When `run` receives `artifacts_dir`, it writes:
@@ -121,16 +111,10 @@ The caller owns the rest of the run layout, including normalized run metadata an
 
 `probe_trigger` creates a uniquely named candidate skill, `<slug>-probe-<8 hex>`, from the supplied description, puts it in a deny-all scope, and runs the query. Triggering is detected when the `skill` tool loads the candidate ID. A `read` tool call whose path contains the candidate directory is accepted as a fallback.
 
-Each probe uses a fresh candidate name and a fresh scope, so ambient skills cannot answer for the candidate. The probe scope is removed after the run; the normalized transcript and result remain available in memory.
+Each probe uses a fresh candidate name and a fresh scope, so ambient skills cannot answer for the candidate.
 
 ## Limits
 
 - Managed system configuration can hard-deny skills or outrank project permission rules. The adapter cannot override that.
-- Global and compatibility skills are hidden with a permission rule rather than unregistered. This is intentional: OpenCode has no per-project switch that removes every ambient source.
-- The output snapshot excludes harness paths by name. A skill that intentionally writes into `.opencode/` will not have those files reported as outputs.
 - A trigger probe cleans its scope before returning, so `run.output_files` paths from a probe no longer exist. Use the transcript when debugging a probe.
-- Early termination after the first trigger observation, repeated probe runs, and trigger-rate reporting belong to the trigger evaluator, not this adapter.
-
-## Adding another harness
-
-Implement the three methods from `scripts/harness.py`, register the class in `scripts/adapters/__init__.py`, and add a sibling document linked from the [adapter index](README.md). Keep the normalized result fields identical so the shared review and benchmark tooling does not change. Unit tests must use canned streams or a fake executable and must never call a live model.
+- Early termination after the first trigger observation, repeated probe runs, and trigger-rate reporting are the caller's responsibility.
