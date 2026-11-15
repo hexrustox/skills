@@ -374,7 +374,7 @@ def _tool_calls(events: Sequence[dict[str, Any]]) -> dict[str, int]:
 
 
 def _steps(events: Sequence[dict[str, Any]]) -> int:
-    return sum(1 for event in events if event.get("type") == "step_finish")
+    return sum(1 for event in events if event.get("type") == "step_start")
 
 
 def _errors(events: Sequence[dict[str, Any]]) -> int:

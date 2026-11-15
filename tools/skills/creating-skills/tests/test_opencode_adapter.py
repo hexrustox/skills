@@ -174,6 +174,7 @@ class OpenCodeRunTests(unittest.TestCase):
         self.assertEqual(result.stderr, "boom\n")
         self.assertEqual(result.assistant_text, "")
         self.assertEqual(result.metrics.errors_encountered, 2)
+        self.assertEqual(result.metrics.total_steps, 1)
         self.assertIn("the run failed", result.transcript_markdown)
 
     def test_run_writes_artifacts_when_asked(self) -> None:

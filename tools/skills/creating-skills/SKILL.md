@@ -121,7 +121,7 @@ Done when the skill still describes one coherent unit of work and every pointer 
 
 ## Test, review, and improve
 
-Eval work requires a harness adapter. Read [the harness contract and OpenCode adapter](references/harnesses/opencode.md) and confirm it supports the current harness before starting. If the harness has no adapter, stop and ask the user for one instead of substituting harness-specific commands.
+Eval work requires a harness adapter. Read the adapter documentation for the current harness in [references/harnesses/](references/harnesses/README.md) and confirm it supports that harness before starting. If there is no adapter for this harness, stop and ask the user for one instead of substituting harness-specific commands.
 
 The loop is: draft, run realistic cases with and without the skill, review the outputs, improve the skill, and repeat.
 

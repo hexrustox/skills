@@ -80,8 +80,8 @@ A timeout kills the process and returns the partial run with `timed_out=True` an
 | --- | --- | --- |
 | `text` | `part.text` | assistant text |
 | `tool_use` | `part.tool`, `part.state.input`, `part.state.output`, `part.state.status`, `part.state.error` | loaded skill IDs, tool counts, errors, Markdown transcript |
-| `step_start` | event type only | Markdown step headings |
-| `step_finish` | `part.tokens.{input,output,reasoning,cache.read,cache.write}` | token totals, step count |
+| `step_start` | event type only | step count, Markdown step headings |
+| `step_finish` | `part.tokens.{input,output,reasoning,cache.read,cache.write}` | token totals |
 | `error` | `error.message` | error count, Markdown transcript |
 
 A minimal stream:
@@ -102,7 +102,7 @@ Lines that are not JSON objects are preserved in the raw transcript but ignored 
 - **Token totals** sum every `step_finish` event. The total is `input + output + reasoning + cache.read + cache.write`, matching OpenCode's own token accounting.
 - **Duration** is wall-clock milliseconds from process start to process exit or timeout.
 - **Output files** are project files that are new or changed during the run. `.opencode/`, `.git/`, and `opencode.json` are excluded because they belong to the harness, not the agent.
-- **Metrics** use the fields the grader and benchmark consume: `tool_calls`, `total_tool_calls`, `total_steps`, `files_created`, `errors_encountered`, `output_chars`, and `transcript_chars`. `output_chars` reads the output files as UTF-8 with replacement, and `transcript_chars` counts the Markdown transcript.
+- **Metrics** use the existing execution-metric field names: `tool_calls`, `total_tool_calls`, `total_steps`, `files_created`, `errors_encountered`, `output_chars`, and `transcript_chars`. `total_steps` counts started steps, so a failed or timed-out step still appears in the count. `output_chars` reads the output files as UTF-8 with replacement, and `transcript_chars` counts the Markdown transcript.
 - **Markdown transcript** renders steps, assistant text, tool inputs and results, errors, and a token/duration/exit-code summary.
 
 When `run` receives `artifacts_dir`, it writes:
@@ -115,7 +115,7 @@ When `run` receives `artifacts_dir`, it writes:
     └── metrics.json
 ```
 
-The caller owns the rest of the run layout, including normalized run metadata and timing.
+The caller owns the rest of the run layout, including normalized run metadata and timing. Without `artifacts_dir`, the adapter writes nothing to disk; `RunResult` still carries both transcripts and the metrics for the caller to persist.
 
 ## Trigger probe
 
@@ -133,4 +133,4 @@ Each probe uses a fresh candidate name and a fresh scope, so ambient skills cann
 
 ## Adding another harness
 
-Implement the three methods from `scripts/harness.py`, register the class in `scripts/adapters/__init__.py`, and add a sibling document here. Keep the normalized result fields identical so the shared review and benchmark tooling does not change. Unit tests must use canned streams or a fake executable and must never call a live model.
+Implement the three methods from `scripts/harness.py`, register the class in `scripts/adapters/__init__.py`, and add a sibling document linked from the [adapter index](README.md). Keep the normalized result fields identical so the shared review and benchmark tooling does not change. Unit tests must use canned streams or a fake executable and must never call a live model.

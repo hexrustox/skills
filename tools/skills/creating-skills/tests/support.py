@@ -130,10 +130,9 @@ class FakeOpenCode:
     def environment(self) -> dict[str, str]:
         return {"FAKE_OPENCODE_CONFIG": str(self.config_path)}
 
-    def configure(self, **options: object) -> "FakeOpenCode":
+    def configure(self, **options: object) -> None:
         options["invocation"] = str(self.invocation_path)
         self.config_path.write_text(json.dumps(options), encoding="utf-8")
-        return self
 
     def invocation(self) -> dict[str, Any]:
         return json.loads(self.invocation_path.read_text(encoding="utf-8"))
