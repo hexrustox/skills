@@ -8,11 +8,14 @@ from scripts.workspace import (
     create_iteration,
     default_workspace,
     eval_directory,
+    iteration_number,
     preserve_inputs,
     resolve_inputs,
     resolve_workspace,
     run_id,
+    skill_name_from_workspace,
     stage_inputs,
+    workspace_name,
     write_eval_metadata,
     write_run_artifacts,
 )
@@ -47,6 +50,19 @@ class WorkspacePathTests(unittest.TestCase):
         workspace = resolve_workspace(skill)
 
         self.assertEqual(workspace, default_workspace(skill))
+
+    def test_workspace_names_round_trip_through_the_suffix(self) -> None:
+        self.assertEqual(workspace_name("example-skill"), "example-skill-workspace")
+        self.assertEqual(
+            skill_name_from_workspace(Path("/tmp/example-skill-workspace")),
+            "example-skill",
+        )
+        self.assertEqual(skill_name_from_workspace(Path("/tmp/elsewhere")), "elsewhere")
+
+    def test_iteration_number_reads_only_canonical_names(self) -> None:
+        self.assertEqual(iteration_number(Path("/tmp/iteration-3")), 3)
+        self.assertIsNone(iteration_number(Path("/tmp/iteration-notes")))
+        self.assertIsNone(iteration_number(Path("/tmp/iteration-1-extra")))
 
 
 class WorkspaceLayoutTests(unittest.TestCase):

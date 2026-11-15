@@ -145,6 +145,7 @@ def canned_run_result(
     *,
     loaded_skill_ids: tuple[str, ...] = (),
     output_name: str = "answer.md",
+    output_text: str = "The answer.\n",
     exit_code: int = 0,
     stderr: str = "",
     timed_out: bool = False,
@@ -152,7 +153,7 @@ def canned_run_result(
     """Build a deterministic run result with one output file."""
     output = scope / output_name
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("The answer.\n", encoding="utf-8")
+    output.write_text(output_text, encoding="utf-8")
     transcript_markdown = "# Transcript\n\nDone.\n"
     return RunResult(
         assistant_text="Done.",
@@ -172,7 +173,7 @@ def canned_run_result(
             total_steps=1,
             files_created=(output_name,),
             errors_encountered=0,
-            output_chars=len("The answer.\n"),
+            output_chars=len(output_text),
             transcript_chars=len(transcript_markdown),
         ),
         timed_out=timed_out,

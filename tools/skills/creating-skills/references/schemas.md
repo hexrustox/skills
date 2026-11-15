@@ -503,11 +503,13 @@ Human review returned by the static page. Located at `<iteration>/feedback.json`
   "reviews": [
     {
       "run_id": "eval-1-with_skill",
-      "feedback": "The output is missing the date field and the total is rounded."
+      "feedback": "The output is missing the date field and the total is rounded.",
+      "reviewed": true
     },
     {
       "run_id": "eval-1-without_skill",
-      "feedback": ""
+      "feedback": "",
+      "reviewed": true
     }
   ],
   "notes": "The baseline is weaker on formatting, but the skill output is still too long."
@@ -517,10 +519,11 @@ Human review returned by the static page. Located at `<iteration>/feedback.json`
 **Fields:**
 
 - `skill_name`: the skill under review.
-- `iteration`: the iteration directory name the feedback applies to.
-- `reviews[]`: one entry per run shown on the page.
+- `iteration`: the iteration directory name the feedback applies to. A file whose `iteration` names a different directory is rejected by the review page.
+- `reviews[]`: one entry per run the reviewer opened.
   - `run_id`: the stable `eval-<ID>-<arm>` identity. Match on this, not on directory order.
-  - `feedback`: freeform reviewer text. An empty string means the reviewer saw the run and requested no change.
+  - `feedback`: freeform reviewer text. An empty string means the reviewer opened the run and requested no change.
+  - `reviewed`: `true` once the reviewer opens the run. The page writes it so an empty review survives a page reload.
 - `notes`: optional cross-run feedback.
 
 A run ID absent from `reviews` was not reviewed. Do not treat absence as acceptance.

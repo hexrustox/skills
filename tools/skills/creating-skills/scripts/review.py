@@ -4,16 +4,19 @@ import argparse
 import base64
 import json
 import mimetypes
-import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from scripts.workspace import ARMS, run_id
+from scripts.workspace import (
+    ARMS,
+    iteration_number,
+    run_id,
+    skill_name_from_workspace,
+)
 
-_ITERATION = re.compile(r"^iteration-(\d+)$")
-_EXCLUDED_OUTPUTS = frozenset({"metrics.json", "user_notes.md"})
+_ROOT_METADATA_OUTPUTS = frozenset({"metrics.json", "user_notes.md"})
 _TEXT_EXTENSIONS = frozenset(
     {
         ".c",
@@ -137,25 +140,24 @@ def collect_runs(iteration_dir: Path) -> list[dict[str, Any]]:
     runs: list[dict[str, Any]] = []
     for eval_dir in _eval_directories(Path(iteration_dir)):
         metadata = _load_json(eval_dir / "eval_metadata.json") or {}
-        eval_id = metadata.get("eval_id", _eval_id_from_directory(eval_dir))
         for arm in ARMS:
             arm_dir = eval_dir / arm
             if arm_dir.is_dir():
-                runs.append(_build_run(eval_dir, arm, metadata, eval_id))
+                runs.append(_build_run(eval_dir, arm, metadata))
     return runs
 
 
 def find_previous_iteration(iteration_dir: Path) -> Path | None:
     """Return the nearest earlier ``iteration-<N>`` beside ``iteration_dir``."""
     iteration = Path(iteration_dir).resolve()
-    number = _iteration_number(iteration)
+    number = iteration_number(iteration)
     if number is None:
         return None
     candidates: list[tuple[int, Path]] = []
     for path in iteration.parent.iterdir():
         if not path.is_dir():
             continue
-        other = _iteration_number(path)
+        other = iteration_number(path)
         if other is not None and other < number:
             candidates.append((other, path))
     if not candidates:
@@ -165,8 +167,22 @@ def find_previous_iteration(iteration_dir: Path) -> Path | None:
 
 def load_feedback(iteration_dir: Path) -> dict[str, Any]:
     """Load reviewer feedback saved beside an iteration."""
-    document = _load_json(Path(iteration_dir) / "feedback.json") or {}
+    iteration = Path(iteration_dir)
+    document = _load_json(iteration / "feedback.json")
+    if document is None:
+        return {"reviews": {}, "reviewed": [], "notes": ""}
+    recorded_iteration = document.get("iteration")
+    if (
+        isinstance(recorded_iteration, str)
+        and recorded_iteration
+        and recorded_iteration != iteration.name
+    ):
+        raise ValueError(
+            f"feedback file {str(iteration / 'feedback.json')!r} is for "
+            f"{recorded_iteration!r}, not {iteration.name!r}"
+        )
     reviews: dict[str, str] = {}
+    reviewed: list[str] = []
     raw_reviews = document.get("reviews")
     if isinstance(raw_reviews, list):
         for entry in raw_reviews:
@@ -176,36 +192,37 @@ def load_feedback(iteration_dir: Path) -> dict[str, Any]:
             feedback = entry.get("feedback")
             if isinstance(run_identity, str) and isinstance(feedback, str):
                 reviews[run_identity] = feedback
-    return {"reviews": reviews, "notes": _text(document.get("notes"))}
+                if (
+                    entry.get("reviewed") is True or feedback.strip()
+                ) and run_identity not in reviewed:
+                    reviewed.append(run_identity)
+    return {
+        "reviews": reviews,
+        "reviewed": reviewed,
+        "notes": _text(document.get("notes")),
+    }
 
 
 def _build_run(
     eval_dir: Path,
     arm: str,
     metadata: dict[str, Any],
-    eval_id: object,
 ) -> dict[str, Any]:
     arm_dir = eval_dir / arm
+    directory_eval_id = _eval_id_from_directory(eval_dir)
     run_document = _load_json(arm_dir / "run.json") or {}
     error_document = _load_json(arm_dir / "error.json")
-    metrics = _load_json(arm_dir / "outputs" / "metrics.json")
-    if metrics is None:
-        raw_metrics = run_document.get("metrics")
-        metrics = raw_metrics if isinstance(raw_metrics, dict) else {}
     return {
-        "run_id": run_id(_eval_key(eval_id), arm),
-        "eval_id": eval_id,
-        "eval_name": _text(metadata.get("eval_name")) or f"eval-{eval_id}",
+        "run_id": run_id(directory_eval_id, arm),
+        "eval_id": metadata.get("eval_id", directory_eval_id),
+        "eval_name": _text(metadata.get("eval_name")) or f"eval-{directory_eval_id}",
         "arm": arm,
         "prompt": _text(metadata.get("prompt")),
         "expected_output": _text(metadata.get("expected_output")),
         "status": _status(run_document, error_document),
         "error": _error_message(error_document),
         "assistant_text": _text(run_document.get("assistant_text")),
-        "timing": _load_json(arm_dir / "timing.json") or {},
-        "metrics": metrics,
         "outputs": _embed_outputs(arm_dir / "outputs"),
-        "user_notes": _read_optional_text(arm_dir / "outputs" / "user_notes.md"),
         "grading": _load_json(arm_dir / "grading.json"),
     }
 
@@ -243,9 +260,7 @@ def _previous_document(previous_dir: Path) -> dict[str, Any]:
         "iteration": previous_dir.name,
         "runs": {
             run["run_id"]: {
-                "status": run["status"],
                 "outputs": run["outputs"],
-                "grading": run["grading"],
             }
             for run in runs
         },
@@ -276,11 +291,7 @@ def _skill_name(iteration_dir: Path, benchmark: dict[str, Any] | None) -> str:
             name = _text(metadata.get("skill_name"))
             if name:
                 return name
-    workspace_name = iteration_dir.parent.name
-    suffix = "-workspace"
-    if workspace_name.endswith(suffix) and len(workspace_name) > len(suffix):
-        return workspace_name[: -len(suffix)]
-    return workspace_name or "skill"
+    return skill_name_from_workspace(iteration_dir.parent) or "skill"
 
 
 def _eval_directories(iteration_dir: Path) -> list[Path]:
@@ -306,33 +317,19 @@ def _eval_id_from_directory(eval_dir: Path) -> str:
     return suffix or "unknown"
 
 
-def _eval_key(eval_id: object) -> int | str:
-    if isinstance(eval_id, (int, str)) and not isinstance(eval_id, bool):
-        return eval_id
-    return str(eval_id)
-
-
-def _iteration_number(path: Path) -> int | None:
-    match = _ITERATION.fullmatch(path.name)
-    return int(match.group(1)) if match is not None else None
-
-
 def _embed_outputs(outputs_dir: Path) -> list[dict[str, Any]]:
     if not outputs_dir.is_dir():
         return []
-    files = sorted(
-        (
-            path
-            for path in outputs_dir.rglob("*")
-            if path.is_file()
-            and path.name not in _EXCLUDED_OUTPUTS
-            and not path.is_symlink()
-        ),
-        key=lambda path: path.relative_to(outputs_dir).as_posix(),
-    )
-    return [
-        _embed_file(path, path.relative_to(outputs_dir).as_posix()) for path in files
-    ]
+    files: list[tuple[Path, str]] = []
+    for path in outputs_dir.rglob("*"):
+        if not path.is_file() or path.is_symlink():
+            continue
+        relative = path.relative_to(outputs_dir)
+        if relative.parent == Path(".") and relative.name in _ROOT_METADATA_OUTPUTS:
+            continue
+        files.append((path, relative.as_posix()))
+    files.sort(key=lambda item: item[1])
+    return [_embed_file(path, name) for path, name in files]
 
 
 def _embed_file(path: Path, name: str) -> dict[str, Any]:
@@ -364,12 +361,6 @@ def _mime_type(path: Path) -> str:
         return _MIME_OVERRIDES[suffix]
     mime, _encoding = mimetypes.guess_type(str(path))
     return mime or "application/octet-stream"
-
-
-def _read_optional_text(path: Path) -> str:
-    if not path.is_file():
-        return ""
-    return path.read_text(encoding="utf-8", errors="replace")
 
 
 def _load_json(path: Path) -> dict[str, Any] | None:

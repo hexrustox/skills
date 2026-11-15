@@ -10,9 +10,29 @@ from pathlib import Path
 from scripts.harness import PreparedScope, RunResult
 
 ARMS = ("with_skill", "without_skill", "old_skill")
+WORKSPACE_SUFFIX = "-workspace"
 
 _ITERATION = re.compile(r"^iteration-(\d+)$")
 _EVAL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def workspace_name(skill_name: str) -> str:
+    """Return the default workspace directory name for a skill."""
+    return f"{skill_name}{WORKSPACE_SUFFIX}"
+
+
+def skill_name_from_workspace(workspace: Path) -> str:
+    """Return the skill name encoded in a default workspace directory name."""
+    name = Path(workspace).name
+    if name.endswith(WORKSPACE_SUFFIX) and len(name) > len(WORKSPACE_SUFFIX):
+        return name[: -len(WORKSPACE_SUFFIX)]
+    return name
+
+
+def iteration_number(path: Path) -> int | None:
+    """Return the number in an ``iteration-<N>`` directory name, if any."""
+    match = _ITERATION.fullmatch(Path(path).name)
+    return int(match.group(1)) if match is not None else None
 
 
 @dataclass(frozen=True)
@@ -51,7 +71,7 @@ class SavedArtifacts:
 def default_workspace(skill_path: Path) -> Path:
     """Return the default workspace beside the skill directory."""
     skill = Path(skill_path).resolve()
-    return skill.parent / f"{skill.name}-workspace"
+    return skill.parent / workspace_name(skill.name)
 
 
 def resolve_workspace(skill_path: Path, workspace: Path | None = None) -> Path:

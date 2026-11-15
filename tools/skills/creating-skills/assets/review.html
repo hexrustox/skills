@@ -276,9 +276,13 @@
 /*__EMBEDDED_DATA__*/
 
 const RUNS = EMBEDDED_DATA.runs || [];
-const FEEDBACK = EMBEDDED_DATA.feedback || { reviews: {}, notes: "" };
+const FEEDBACK = EMBEDDED_DATA.feedback || { reviews: {}, reviewed: [], notes: "" };
 const PREVIOUS = EMBEDDED_DATA.previous;
 const feedbackMap = Object.assign({}, FEEDBACK.reviews || {});
+const visited = new Set(FEEDBACK.reviewed || []);
+for (const [runId, text] of Object.entries(FEEDBACK.reviews || {})) {
+  if (String(text).trim()) visited.add(runId);
+}
 let currentRunId = RUNS.length ? RUNS[0].run_id : null;
 
 function escapeHtml(value) {
@@ -296,6 +300,14 @@ function armLabel(arm) {
 
 function statusLabel(status) {
   return status === "timed_out" ? "timed out" : status;
+}
+
+function rateBand(rate) {
+  const number = Number(rate);
+  if (!Number.isFinite(number)) return "mixed";
+  if (number >= 0.8) return "good";
+  if (number < 0.5) return "bad";
+  return "mixed";
 }
 
 function setStatus(message) {
@@ -316,9 +328,8 @@ function gradeBadge(run) {
   if (!total) return "";
   const rate = Number(summary.pass_rate);
   const display = Number.isFinite(rate) ? Math.round(rate * 100) + "%" : "graded";
-  const good = Number.isFinite(rate) ? rate >= 0.8 : false;
-  const bad = Number.isFinite(rate) ? rate < 0.5 : false;
-  const className = good ? "good" : bad ? "bad" : "";
+  const band = rateBand(rate);
+  const className = band === "good" ? "good" : band === "bad" ? "bad" : "";
   return '<span class="badge ' + className + '">' + escapeHtml(display) + "</span>";
 }
 
@@ -351,8 +362,8 @@ function renderRunList() {
 }
 
 function updateReviewProgress() {
-  const reviewed = RUNS.filter((run) => (feedbackMap[run.run_id] || "").trim()).length;
-  document.getElementById("review-progress").textContent = reviewed + " of " + RUNS.length + " with feedback";
+  const reviewed = RUNS.filter((run) => visited.has(run.run_id)).length;
+  document.getElementById("review-progress").textContent = reviewed + " of " + RUNS.length + " reviewed";
 }
 
 function updateFeedbackDots() {
@@ -364,6 +375,7 @@ function updateFeedbackDots() {
 
 function selectRun(runId) {
   currentRunId = runId;
+  visited.add(runId);
   renderRunList();
   renderDetail();
   document.getElementById("run-detail").scrollTop = 0;
@@ -477,10 +489,7 @@ function renderGrades(grading) {
   const failed = Number(summary.failed) || 0;
   const total = Number(summary.total) || 0;
   const rate = Number(summary.pass_rate);
-  let rateClass = "mixed";
-  if (Number.isFinite(rate)) {
-    rateClass = rate >= 0.8 ? "good" : rate < 0.5 ? "bad" : "mixed";
-  }
+  const rateClass = rateBand(rate);
   const rateText = Number.isFinite(rate) ? Math.round(rate * 100) + "%" : "Not scored";
   let html = '<div class="grades-summary"><span class="grade-rate ' + rateClass + '">' + escapeHtml(rateText) + "</span>" +
     "<span>" + passed + " passed, " + failed + " failed of " + total + "</span></div>";
@@ -501,9 +510,10 @@ function feedbackDocument() {
   return {
     skill_name: EMBEDDED_DATA.skill_name,
     iteration: EMBEDDED_DATA.iteration,
-    reviews: RUNS.map((run) => ({
+    reviews: RUNS.filter((run) => visited.has(run.run_id)).map((run) => ({
       run_id: run.run_id,
       feedback: (feedbackMap[run.run_id] || "").trim(),
+      reviewed: true,
     })),
     notes: notes ? notes.value.trim() : "",
   };
@@ -574,8 +584,16 @@ function formatNumber(value, digits) {
 
 function formatStat(stat, percent) {
   if (!stat) return "\u2014";
-  const mean = percent ? formatNumber(Number(stat.mean) * 100, 0) + "%" : formatNumber(stat.mean, 1);
-  const deviation = percent ? formatNumber(Number(stat.stddev) * 100, 0) + "%" : formatNumber(stat.stddev, 1);
+  const suffix = percent ? "%" : "";
+  const scale = percent ? 100 : 1;
+  const meanValue = Number(stat.mean);
+  const deviationValue = Number(stat.stddev);
+  const mean = Number.isFinite(meanValue)
+    ? (meanValue * scale).toFixed(percent ? 0 : 1) + suffix
+    : "\u2014";
+  const deviation = Number.isFinite(deviationValue)
+    ? (deviationValue * scale).toFixed(percent ? 0 : 1) + suffix
+    : "\u2014";
   return mean + " \u00b1 " + deviation;
 }
 
@@ -630,7 +648,8 @@ function renderBenchmark() {
     for (const run of runs) {
       const result = run.result || {};
       const rate = Number(result.pass_rate);
-      const rateClass = Number.isFinite(rate) ? (rate >= 0.8 ? "delta-positive" : rate < 0.5 ? "delta-negative" : "") : "";
+      const band = rateBand(rate);
+      const rateClass = band === "good" ? "delta-positive" : band === "bad" ? "delta-negative" : "";
       const rateText = Number.isFinite(rate) ? Math.round(rate * 100) + "%" : "\u2014";
       html += "<tr><td>" + escapeHtml(run.eval_name || ("Eval " + run.eval_id)) + "</td>" +
         "<td>" + escapeHtml(armLabel(run.configuration)) + "</td>" +

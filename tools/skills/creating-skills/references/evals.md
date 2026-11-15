@@ -147,7 +147,7 @@ Runs are matched across iterations by the stable `eval-<ID>-<arm>` identity. The
 --skill-name NAME   override the name in the page header
 ```
 
-The reviewer writes feedback per run and then uses **Download feedback JSON** or **Copy feedback JSON**. Save a downloaded file as `<iteration>/feedback.json`, or accept the same JSON pasted into the conversation. See [the feedback contract](schemas.md#feedbackjson) for the fields. Read `reviews[].feedback` keyed by `run_id`; an empty string means the reviewer saw that run and requested no change, while a missing run ID means it was not reviewed. `notes` holds cross-run feedback. Use the feedback to improve the skill in generalizable ways, not to tune the sample prompt.
+The reviewer writes feedback per run and then uses **Download feedback JSON** or **Copy feedback JSON**. Save a downloaded file as `<iteration>/feedback.json`, or accept the same JSON pasted into the conversation. If the reviewer pastes it into the conversation, write it to `<iteration>/feedback.json` before the next iteration so the next page can show it as previous feedback. See [the feedback contract](schemas.md#feedbackjson) for the fields. Read `reviews[].feedback` keyed by `run_id`; an entry with empty feedback means the reviewer opened that run and requested no change, while a run ID absent from `reviews` was not reviewed. `notes` holds cross-run feedback. Use the feedback to improve the skill in generalizable ways, not to tune the sample prompt.
 
 ## Compare two outputs blindly
 

@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from scripts.review import main, write_review
+from scripts.workspace import run_id, write_eval_metadata, write_run_artifacts
+
+from tests.support import canned_run_result
 
 _SKILL_NAME = "example-skill"
 _GRADING = {
@@ -55,67 +58,33 @@ class ReviewPageTests(unittest.TestCase):
         grading: dict[str, Any] | None = None,
     ) -> Path:
         eval_dir = iteration / f"eval-{eval_id}"
-        eval_dir.mkdir(parents=True, exist_ok=True)
-        (eval_dir / "eval_metadata.json").write_text(
-            json.dumps(
-                {
-                    "eval_id": eval_id,
-                    "eval_name": eval_name,
-                    "prompt": prompt,
-                    "expected_output": "A short poem.",
-                    "expectations": [
-                        expectation["text"]
-                        for expectation in (grading or {}).get("expectations", [])
-                    ],
-                }
-            ),
-            encoding="utf-8",
+        metadata_path = write_eval_metadata(
+            eval_dir,
+            eval_id=eval_id,
+            prompt=prompt,
+            expected_output="A short poem.",
+        )
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        metadata["eval_name"] = eval_name
+        metadata["expectations"] = [
+            expectation["text"]
+            for expectation in (grading or {}).get("expectations", [])
+        ]
+        metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+        scope = self.root / "scopes" / f"{iteration.name}-{eval_id}-{arm}"
+        scope.mkdir(parents=True)
+        result = canned_run_result(
+            scope,
+            loaded_skill_ids=(_SKILL_NAME,),
+            output_text=output_text,
         )
         arm_dir = eval_dir / arm
-        outputs = arm_dir / "outputs"
-        outputs.mkdir(parents=True, exist_ok=True)
-        (outputs / "answer.md").write_text(output_text, encoding="utf-8")
-        (outputs / "metrics.json").write_text(
-            json.dumps(
-                {
-                    "tool_calls": {"write": 1},
-                    "total_tool_calls": 1,
-                    "total_steps": 1,
-                    "files_created": ["answer.md"],
-                    "errors_encountered": 0,
-                    "output_chars": len(output_text),
-                    "transcript_chars": 10,
-                }
-            ),
-            encoding="utf-8",
-        )
-        run_id = f"eval-{eval_id}-{arm}"
-        (arm_dir / "run.json").write_text(
-            json.dumps(
-                {
-                    "run_id": run_id,
-                    "assistant_text": "Finished.",
-                    "tokens": {"input": 10, "output": 5, "total": 15},
-                    "duration_ms": 1200,
-                    "loaded_skill_ids": [_SKILL_NAME],
-                    "output_files": ["answer.md"],
-                    "exit_code": 0,
-                    "stderr": "",
-                    "metrics": {},
-                    "timed_out": False,
-                }
-            ),
-            encoding="utf-8",
-        )
-        (arm_dir / "timing.json").write_text(
-            json.dumps(
-                {
-                    "total_tokens": 15,
-                    "duration_ms": 1200,
-                    "total_duration_seconds": 1.2,
-                }
-            ),
-            encoding="utf-8",
+        write_run_artifacts(
+            arm_dir,
+            result,
+            scope,
+            run_identity=run_id(eval_id, arm),
         )
         if grading is not None:
             (arm_dir / "grading.json").write_text(json.dumps(grading), encoding="utf-8")
@@ -127,15 +96,16 @@ class ReviewPageTests(unittest.TestCase):
         reviews: dict[str, str],
         *,
         notes: str = "",
+        iteration_name: str | None = None,
     ) -> Path:
         path = iteration / "feedback.json"
         path.write_text(
             json.dumps(
                 {
                     "skill_name": _SKILL_NAME,
-                    "iteration": iteration.name,
+                    "iteration": iteration_name or iteration.name,
                     "reviews": [
-                        {"run_id": run_id, "feedback": feedback}
+                        {"run_id": run_id, "feedback": feedback, "reviewed": True}
                         for run_id, feedback in reviews.items()
                     ],
                     "notes": notes,
@@ -165,6 +135,23 @@ class ReviewPageTests(unittest.TestCase):
         self.assertIn('id="copy-feedback"', html)
         self.assertIn("Download feedback JSON", html)
         self.assertIn("Copy feedback JSON", html)
+
+    def test_output_with_a_script_tag_cannot_break_the_page(self) -> None:
+        iteration = self.workspace / "iteration-2"
+        self.write_run(
+            iteration,
+            eval_id=1,
+            output_text="<script>alert('boom')</script>\n",
+        )
+
+        html = write_review(iteration).read_text(encoding="utf-8")
+        data = embedded_data(html)
+
+        self.assertEqual(
+            data["runs"][0]["outputs"][0]["content"],
+            "<script>alert('boom')</script>\n",
+        )
+        self.assertEqual(html.count("</script>"), 1)
 
     def test_previous_iteration_is_matched_by_stable_run_identity(self) -> None:
         previous = self.workspace / "iteration-1"
@@ -218,7 +205,61 @@ class ReviewPageTests(unittest.TestCase):
         self.assertEqual(
             data["feedback"]["reviews"]["eval-1-with_skill"], "This looks right."
         )
+        self.assertEqual(data["feedback"]["reviewed"], ["eval-1-with_skill"])
         self.assertEqual(data["feedback"]["notes"], "The baseline needs work.")
+
+    def test_empty_reviewed_feedback_is_kept_as_reviewed(self) -> None:
+        iteration = self.workspace / "iteration-2"
+        self.write_run(iteration, eval_id=1)
+        self.write_feedback(iteration, {"eval-1-with_skill": ""})
+
+        data = embedded_data(write_review(iteration).read_text(encoding="utf-8"))
+
+        self.assertEqual(data["feedback"]["reviews"]["eval-1-with_skill"], "")
+        self.assertEqual(data["feedback"]["reviewed"], ["eval-1-with_skill"])
+
+    def test_feedback_for_a_different_iteration_is_rejected(self) -> None:
+        iteration = self.workspace / "iteration-2"
+        self.write_run(iteration, eval_id=1)
+        self.write_feedback(
+            iteration,
+            {"eval-1-with_skill": "Wrong iteration."},
+            iteration_name="iteration-1",
+        )
+
+        with self.assertRaisesRegex(ValueError, "iteration-1"):
+            write_review(iteration)
+
+    def test_stable_identity_comes_from_the_eval_directory(self) -> None:
+        previous = self.workspace / "iteration-1"
+        current = self.workspace / "iteration-2"
+        self.write_run(previous, eval_id="ocean", output_text="Old ocean.\n")
+        self.write_run(current, eval_id="ocean", output_text="New ocean.\n")
+        metadata_path = current / "eval-ocean" / "eval_metadata.json"
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        metadata["eval_id"] = "edited"
+        metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+        data = embedded_data(write_review(current).read_text(encoding="utf-8"))
+
+        self.assertEqual(data["runs"][0]["run_id"], "eval-ocean-with_skill")
+        self.assertEqual(
+            data["previous"]["runs"]["eval-ocean-with_skill"]["outputs"][0]["content"],
+            "Old ocean.\n",
+        )
+
+    def test_nested_output_named_metrics_is_not_filtered(self) -> None:
+        iteration = self.workspace / "iteration-2"
+        arm_dir = self.write_run(iteration, eval_id=1)
+        nested = arm_dir / "outputs" / "reports" / "metrics.json"
+        nested.parent.mkdir(parents=True)
+        nested.write_text("{}\n", encoding="utf-8")
+
+        data = embedded_data(write_review(iteration).read_text(encoding="utf-8"))
+
+        names = [output["name"] for output in data["runs"][0]["outputs"]]
+        self.assertIn("reports/metrics.json", names)
+        self.assertNotIn("metrics.json", names)
 
     def test_benchmark_tab_renders_supplied_benchmark_data(self) -> None:
         iteration = self.workspace / "iteration-2"
