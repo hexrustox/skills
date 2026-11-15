@@ -148,6 +148,32 @@ def _write_json(path: Path, data: object) -> None:
     )
 
 
+def write_error_artifact(
+    eval_dir: Path,
+    *,
+    run_identity: str,
+    eval_id: int | str,
+    arm: str,
+    error: Exception,
+    traceback_text: str,
+) -> Path:
+    """Write a diagnostic sidecar for a run that could not start."""
+    arm_dir = Path(eval_dir) / arm
+    arm_dir.mkdir(parents=True, exist_ok=True)
+    path = arm_dir / "error.json"
+    _write_json(
+        path,
+        {
+            "run_id": run_identity,
+            "eval_id": eval_id,
+            "arm": arm,
+            "error": {"type": type(error).__name__, "message": str(error)},
+            "traceback": traceback_text,
+        },
+    )
+    return path
+
+
 def resolve_inputs(skill_path: Path, files: Sequence[str]) -> tuple[InputSource, ...]:
     """Resolve eval input paths against the skill root and validate them."""
     skill_root = Path(skill_path).resolve()

@@ -96,6 +96,8 @@ Useful options:
 
 The batch writes `eval_metadata.json` with empty expectations for every selected case before starting any run, then prints the iteration path and launches both arms for every case together. Draft assertions while the runs are in progress by editing `expectations` in each `<iteration>/eval-<ID>/eval_metadata.json`; existing metadata is never overwritten.
 
+A filtered batch creates a partial iteration for debugging; run the complete set when you need a benchmark across every case. An iteration cannot mix `without_skill` and `old_skill` runs. If `<workspace>/skill-snapshot/` exists but `--baseline-skill` was not passed, the command warns rather than silently choosing `without_skill`.
+
 Exit codes are `0` when every run is ok, `1` when any run failed or errored, and `2` when the batch could not start.
 
 ## Debug one arm

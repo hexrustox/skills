@@ -329,6 +329,13 @@ class BatchLayoutTests(unittest.TestCase):
 
         self.assertEqual(len(result.outcomes), 2)
 
+    def test_retry_cannot_mix_baseline_arms_in_one_iteration(self) -> None:
+        iteration = self.root / "existing-workspace" / "iteration-1"
+        (iteration / "eval-1" / "old_skill").mkdir(parents=True)
+
+        with self.assertRaisesRegex(ValueError, "already contains old_skill"):
+            run_batch(self.harness, self.skill, iteration_dir=iteration)
+
     def test_workspace_override_relocates_the_batch(self) -> None:
         override = self.root / "elsewhere"
 
@@ -552,6 +559,24 @@ class BatchCliTests(unittest.TestCase):
         self.assertTrue((iteration / "eval-1" / "with_skill" / "run.json").is_file())
         self.assertTrue((iteration / "eval-1" / "old_skill" / "run.json").is_file())
         self.assertFalse((iteration / "eval-2").exists())
+
+    def test_cli_warns_when_a_snapshot_exists_but_was_not_passed(self) -> None:
+        snapshot = self.skill.parent / "example-skill-workspace" / "skill-snapshot"
+        snapshot.parent.mkdir(parents=True)
+        shutil.copytree(self.skill, snapshot)
+        stderr = io.StringIO()
+        with (
+            mock.patch("scripts.eval_batch.get_harness", return_value=self.harness),
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(stderr),
+        ):
+            status = main(["--skill", str(self.skill)])
+
+        self.assertEqual(status, 0)
+        self.assertIn("pass --baseline-skill", stderr.getvalue())
+        iteration = self.skill.parent / "example-skill-workspace" / "iteration-1"
+        self.assertTrue((iteration / "eval-1" / "without_skill").is_dir())
+        self.assertFalse((iteration / "eval-1" / "old_skill").exists())
 
     def test_cli_rejects_a_missing_iteration(self) -> None:
         stderr = io.StringIO()

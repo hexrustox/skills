@@ -1,7 +1,6 @@
 """Run every eval case in both arms into one canonical iteration."""
 
 import argparse
-import json
 import shutil
 import sys
 import tempfile
@@ -11,6 +10,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from scripts.adapters import available_harnesses, get_harness
 from scripts.eval_case import (
@@ -24,6 +24,7 @@ from scripts.eval_case import (
 from scripts.frontmatter import parse_skill_md
 from scripts.harness import Harness
 from scripts.workspace import (
+    ARMS,
     InputSource,
     create_iteration,
     eval_directory,
@@ -33,12 +34,12 @@ from scripts.workspace import (
     resolve_workspace,
     run_id,
     validate_eval_id,
+    write_error_artifact,
     write_eval_metadata,
 )
 
-WITH_SKILL = "with_skill"
-WITHOUT_SKILL = "without_skill"
-OLD_SKILL = "old_skill"
+WITH_SKILL, WITHOUT_SKILL, OLD_SKILL = ARMS
+RunStatus = Literal["ok", "failed", "error"]
 
 
 @dataclass(frozen=True)
@@ -48,7 +49,7 @@ class RunOutcome:
     run_id: str
     eval_id: int | str
     arm: str
-    status: str
+    status: RunStatus
     case_run: CaseRun | None = None
     error: str | None = None
 
@@ -108,6 +109,7 @@ def run_batch(
             iteration_dir = create_iteration(resolve_workspace(skill_path, workspace))
         else:
             iteration_dir = Path(iteration_dir).resolve()
+        _ensure_consistent_baseline(iteration_dir, baseline_arm)
 
         outcomes: dict[tuple[int, str], RunOutcome] = {}
         tasks: list[tuple[int, EvalCase, str]] = []
@@ -115,7 +117,12 @@ def run_batch(
             eval_dir = eval_directory(iteration_dir, case.eval_id)
             try:
                 eval_dir.mkdir(parents=True, exist_ok=True)
-                _write_metadata(eval_dir, case)
+                write_eval_metadata(
+                    eval_dir,
+                    eval_id=case.eval_id,
+                    prompt=case.prompt,
+                    expected_output=case.expected_output,
+                )
             except OSError as error:
                 _record_case_error(
                     eval_dir, case, arms, index, _failure(error), outcomes
@@ -212,13 +219,16 @@ def _select_cases(
     return tuple(case for case in cases if str(case.eval_id) in selected)
 
 
-def _write_metadata(eval_dir: Path, case: EvalCase) -> None:
-    write_eval_metadata(
-        eval_dir,
-        eval_id=case.eval_id,
-        prompt=case.prompt,
-        expected_output=case.expected_output,
-    )
+def _ensure_consistent_baseline(iteration_dir: Path, baseline_arm: str) -> None:
+    """Reject adding the other baseline form to an existing iteration."""
+    if not iteration_dir.is_dir():
+        return
+    other = OLD_SKILL if baseline_arm == WITHOUT_SKILL else WITHOUT_SKILL
+    if any((path / other).is_dir() for path in iteration_dir.glob("eval-*")):
+        raise ValueError(
+            f"iteration {str(iteration_dir)!r} already contains {other} runs; "
+            "start a new iteration or use the same baseline"
+        )
 
 
 def _record_case_error(
@@ -232,13 +242,17 @@ def _record_case_error(
     for arm in arms:
         identity = run_id(case.eval_id, arm)
         _write_error(eval_dir, case, arm, identity, failure)
-        outcomes[(index, arm)] = RunOutcome(
-            run_id=identity,
-            eval_id=case.eval_id,
-            arm=arm,
-            status="error",
-            error=str(failure.error),
-        )
+        outcomes[(index, arm)] = _error_outcome(case, arm, failure.error)
+
+
+def _error_outcome(case: EvalCase, arm: str, error: Exception) -> RunOutcome:
+    return RunOutcome(
+        run_id=run_id(case.eval_id, arm),
+        eval_id=case.eval_id,
+        arm=arm,
+        status="error",
+        error=str(error),
+    )
 
 
 def _run_one(
@@ -247,7 +261,7 @@ def _run_one(
     case: EvalCase,
     arm: str,
     iteration_dir: Path,
-    baseline_skill: Path | None,
+    baseline_alias: Path | None,
     model: str | None,
     timeout_seconds: float,
 ) -> RunOutcome:
@@ -260,22 +274,16 @@ def _run_one(
             case,
             arm,
             iteration_dir=iteration_dir,
-            baseline_skill=baseline_skill,
+            baseline_skill=baseline_alias,
             model=model,
             timeout_seconds=timeout_seconds,
         )
     except Exception as error:  # noqa: BLE001 - one run must not stop the batch
         failure = _failure(error)
         _write_error(eval_dir, case, arm, identity, failure)
-        return RunOutcome(
-            run_id=identity,
-            eval_id=case.eval_id,
-            arm=arm,
-            status="error",
-            error=str(error),
-        )
+        return _error_outcome(case, arm, error)
 
-    status = (
+    status: RunStatus = (
         "ok" if run.result.exit_code == 0 and not run.result.timed_out else "failed"
     )
     return RunOutcome(
@@ -330,6 +338,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise ValueError(
                     f"iteration {args.iteration} does not exist in {str(workspace)!r}"
                 )
+        if args.baseline_skill is None:
+            snapshot = resolve_workspace(skill_path, args.workspace) / "skill-snapshot"
+            if snapshot.is_dir():
+                print(
+                    f"warning: {snapshot} exists; pass --baseline-skill to use it",
+                    file=sys.stderr,
+                )
         harness = get_harness(args.harness)
         result = run_batch(
             harness,
@@ -375,22 +390,14 @@ def _write_error(
     identity: str,
     failure: _Failure,
 ) -> None:
-    arm_dir = eval_dir / arm
-    document = {
-        "run_id": identity,
-        "eval_id": case.eval_id,
-        "arm": arm,
-        "error": {
-            "type": type(failure.error).__name__,
-            "message": str(failure.error),
-        },
-        "traceback": failure.traceback,
-    }
     try:
-        arm_dir.mkdir(parents=True, exist_ok=True)
-        (arm_dir / "error.json").write_text(
-            json.dumps(document, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
+        write_error_artifact(
+            eval_dir,
+            run_identity=identity,
+            eval_id=case.eval_id,
+            arm=arm,
+            error=failure.error,
+            traceback_text=failure.traceback,
         )
     except OSError:
         pass
