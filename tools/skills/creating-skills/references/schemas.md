@@ -7,6 +7,8 @@ This document defines the JSON contracts used by `creating-skills`. Paths are re
 └── iteration-<N>/
     ├── benchmark.json
     ├── benchmark.md
+    ├── review.html
+    ├── feedback.json
     └── eval-<ID>/
         ├── eval_metadata.json
         ├── comparison.json
@@ -19,7 +21,7 @@ This document defines the JSON contracts used by `creating-skills`. Paths are re
             └── grading.json
 ```
 
-The `<arm>` directory is `with_skill`, `without_skill`, or `old_skill`. The benchmark files live at the iteration root. See [the eval workspace reference](evals.md) for the full layout and the run commands. `run.json` and `error.json` are workspace artifacts rather than grading contracts; they are described in that reference.
+The `<arm>` directory is `with_skill`, `without_skill`, or `old_skill`. The benchmark files live at the iteration root. See [the eval workspace reference](evals.md) for the full layout and the run commands. `run.json` and `error.json` are workspace artifacts rather than grading contracts; they are described in that reference. `review.html` embeds these artifacts for human review, and `feedback.json` records the result of that review.
 
 ## Contents
 
@@ -31,6 +33,7 @@ The `<arm>` directory is `with_skill`, `without_skill`, or `old_skill`. The benc
 6. [benchmark.json](#benchmarkjson)
 7. [comparison.json](#comparisonjson)
 8. [analysis.json](#analysisjson)
+9. [feedback.json](#feedbackjson)
 
 ---
 
@@ -486,3 +489,38 @@ Output from the post-hoc analyzer after a blind comparison. Located at `<eval>/a
 The benchmark analysis pass uses a different output: a JSON array of strings. The calling agent places those strings in `benchmark.json` under `notes`.
 
 A comparison that ends in a tie has no `analysis.json`; stop after the comparison. There is no version-history file. Iterations and the stable `eval-<ID>-<arm>` run identity carry progress across the loop.
+
+---
+
+## feedback.json
+
+Human review returned by the static page. Located at `<iteration>/feedback.json`. Save the page's downloaded file here, or paste the copied JSON into the conversation. The review page preloads this file when it exists.
+
+```json
+{
+  "skill_name": "example-skill",
+  "iteration": "iteration-2",
+  "reviews": [
+    {
+      "run_id": "eval-1-with_skill",
+      "feedback": "The output is missing the date field and the total is rounded."
+    },
+    {
+      "run_id": "eval-1-without_skill",
+      "feedback": ""
+    }
+  ],
+  "notes": "The baseline is weaker on formatting, but the skill output is still too long."
+}
+```
+
+**Fields:**
+
+- `skill_name`: the skill under review.
+- `iteration`: the iteration directory name the feedback applies to.
+- `reviews[]`: one entry per run shown on the page.
+  - `run_id`: the stable `eval-<ID>-<arm>` identity. Match on this, not on directory order.
+  - `feedback`: freeform reviewer text. An empty string means the reviewer saw the run and requested no change.
+- `notes`: optional cross-run feedback.
+
+A run ID absent from `reviews` was not reviewed. Do not treat absence as acceptance.

@@ -15,6 +15,8 @@ The batch command creates one `iteration-<N>/` and runs every selected case in b
 └── iteration-<N>/
     ├── benchmark.json                      # after aggregation
     ├── benchmark.md
+    ├── review.html                         # generated static review page
+    ├── feedback.json                       # returned human review
     └── eval-<ID>/
         ├── eval_metadata.json
         ├── inputs/                         # only when the case lists files
@@ -41,7 +43,7 @@ A setup failure, such as a missing input file or a scope preparation error, writ
 
 ## Run identity
 
-The stable identity is `eval-<ID>-<arm>`, for example `eval-1-with_skill`. It is the path from the iteration directory with `/` replaced by `-`, and it does not depend on the iteration number or workspace location. Use it to match outputs and feedback across iterations.
+The stable identity is `eval-<ID>-<arm>`, for example `eval-1-with_skill`. It is the path from the iteration directory with `/` replaced by `-`, and it does not depend on the iteration number or workspace location. Use it to match outputs and feedback across iterations. The review page uses it to pair each run with its previous output and feedback.
 
 ## Arms
 
@@ -72,6 +74,8 @@ Every path in `files` resolves against the skill root. The runner copies each fi
 - `run.json` holds the normalized run metadata: the stable run ID, assistant text, token totals, duration, loaded skill IDs, relative output paths, exit code, stderr, derived metrics, and whether the run timed out.
 - `grading.json` is the grader's result. It holds `expectations` with `text`, `passed`, and `evidence`, plus summary counts, copied execution metrics and timing, claims, an optional user-notes summary, and optional eval feedback.
 - `comparison.json` and `analysis.json` are optional outputs of a blind comparison. They live in the eval directory.
+- `review.html` is the standalone review page generated from the iteration's run artifacts. It embeds the data and makes no network requests.
+- `feedback.json` is the human reviewer's returned feedback. The review page offers it as a download and as copied JSON; save it beside the iteration.
 
 `outputs/metrics.json` is derived from the run's JSONL transcript. It records tool calls, steps, files created, errors, output characters, and transcript characters. Token totals for a benchmark come from `timing.json`.
 
@@ -122,6 +126,28 @@ Grade after the runs finish and the expectations are written. Grading an empty e
 5. Prefer a script for anything you can check programmatically. A script is faster, more reliable, and repeatable across iterations.
 6. Read the optional `eval_feedback`. An assertion that would pass for a wrong output, or an important outcome with no assertion, is a gap to fix in `eval_metadata.json` and `evals/evals.json` before the next iteration. Do not force subjective qualities such as writing style into assertions.
 7. The grader copies `outputs/metrics.json` into `execution_metrics`, copies `timing.json` into `timing`, and summarizes optional `outputs/user_notes.md`. Never substitute output characters for tokens.
+
+## Review the runs
+
+Generate the review page after grading and before judging the outputs yourself. Run this from the `creating-skills` skill directory:
+
+```bash
+python -m scripts.review --iteration path/to/my-skill-workspace/iteration-2
+```
+
+It writes `<iteration>/review.html`. The page embeds each run's prompt, output files, formal grades, the previous iteration's outputs and feedback, and a benchmark tab when `<iteration>/benchmark.json` exists. Open the file directly or send it to the reviewer; it needs no server, port, or browser launch, and it makes no network requests.
+
+Runs are matched across iterations by the stable `eval-<ID>-<arm>` identity. The nearest earlier iteration supplies the previous context by default. Options:
+
+```text
+--previous DIR      compare against a specific iteration
+--benchmark PATH    supply a specific benchmark.json
+--no-previous       omit previous outputs and feedback
+--output PATH       write the page somewhere other than <iteration>/review.html
+--skill-name NAME   override the name in the page header
+```
+
+The reviewer writes feedback per run and then uses **Download feedback JSON** or **Copy feedback JSON**. Save a downloaded file as `<iteration>/feedback.json`, or accept the same JSON pasted into the conversation. See [the feedback contract](schemas.md#feedbackjson) for the fields. Read `reviews[].feedback` keyed by `run_id`; an empty string means the reviewer saw that run and requested no change, while a missing run ID means it was not reviewed. `notes` holds cross-run feedback. Use the feedback to improve the skill in generalizable ways, not to tune the sample prompt.
 
 ## Compare two outputs blindly
 
