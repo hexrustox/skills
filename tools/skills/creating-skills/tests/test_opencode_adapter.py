@@ -318,6 +318,29 @@ class OpenCodeTriggerTests(unittest.TestCase):
 
         self.assertTrue(result.triggered)
 
+    def test_probe_stops_the_run_once_triggering_is_observed(self) -> None:
+        for trigger in ("skill", "read"):
+            with self.subTest(trigger=trigger):
+                self.fake.configure(trigger=trigger, trigger_sleep=5)
+
+                started = time.monotonic()
+                result = self.harness.probe_trigger(
+                    "example-skill", "Does example work.", "Do the thing"
+                )
+                elapsed = time.monotonic() - started
+
+                self.assertTrue(result.triggered)
+                self.assertLess(elapsed, 3)
+
+    def test_probe_ignores_a_different_skill_event(self) -> None:
+        self.fake.configure(trigger="skill", trigger_id="other-skill")
+
+        result = self.harness.probe_trigger(
+            "example-skill", "Does example work.", "Do the thing"
+        )
+
+        self.assertFalse(result.triggered)
+
     def test_probe_reports_no_trigger_when_only_text_appears(self) -> None:
         self.fake.configure(
             stdout=(
@@ -335,6 +358,18 @@ class OpenCodeTriggerTests(unittest.TestCase):
 
     def test_probe_ignores_a_read_outside_the_candidate_directory(self) -> None:
         self.fake.configure(trigger="read", read_path="notes/{candidate}.txt")
+
+        result = self.harness.probe_trigger(
+            "example-skill", "Does example work.", "Do the thing"
+        )
+
+        self.assertFalse(result.triggered)
+
+    def test_probe_ignores_a_sibling_directory_with_the_candidate_prefix(self) -> None:
+        self.fake.configure(
+            trigger="read",
+            read_path=".opencode/skills/{candidate}-other/SKILL.md",
+        )
 
         result = self.harness.probe_trigger(
             "example-skill", "Does example work.", "Do the thing"

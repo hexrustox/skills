@@ -145,6 +145,14 @@ The test cases are a small sample of how the skill will be used. Improve the ski
 
 Stop when the user is satisfied, the feedback is empty, or another iteration is not making meaningful progress.
 
+## Test the description
+
+Read the [harness adapter index](references/harnesses/README.md) before running trigger evals. Task evals check the output after the skill loads; they do not show whether the description makes the agent load it. Write realistic should-trigger and should-not-trigger queries, including near-misses, and save them under `evals/trigger_evals.json`. Run the trigger evaluator through the harness adapter; it runs each query several times in parallel and reports a trigger rate and pass/fail per query.
+
+Read [the trigger eval reference](references/trigger-evals.md) for the query format, command, output contract, and how the threshold decides pass/fail. Use `--description` to compare a candidate description before editing `SKILL.md`.
+
+Done when the trigger rates and task evals both support the current description, or the failures point to a change in the description.
+
 ## Blind comparison
 
 Use a blind comparison when close versions need a more rigorous judgment than the review page provides. It is optional and requires fresh-context runs. Read [the eval workspace reference](references/evals.md#compare-two-outputs-blindly) for the procedure, then use [the comparator instructions](agents/comparator.md) and [the analyzer instructions](agents/analyzer.md). A tie ends the comparison; there is no winner for the analyzer to explain.

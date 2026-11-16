@@ -6,12 +6,13 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
-from collections.abc import Sequence
-from dataclasses import asdict
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from scripts.harness import (
     PreparedScope,
@@ -23,6 +24,17 @@ from scripts.harness import (
 
 _NO_TOOLS_AGENT = "creating-skills-no-tools"
 _HARNESS_PATHS = {".opencode", ".git"}
+
+
+@dataclass(frozen=True)
+class _Execution:
+    """The raw process output and timing behind one run."""
+
+    stdout: str
+    stderr: str
+    duration_ms: int
+    exit_code: int
+    timed_out: bool
 
 
 class OpenCodeHarness:
@@ -86,6 +98,32 @@ class OpenCodeHarness:
         if not scope.path.is_dir():
             raise ValueError(f"scope directory {str(scope.path)!r} does not exist")
         before = _snapshot(scope.path)
+        execution = self._execute(
+            scope,
+            prompt,
+            model=model,
+            timeout_seconds=timeout_seconds,
+            input_files=input_files,
+            no_tools=no_tools,
+        )
+        result = _run_result(scope.path, before, execution)
+
+        if artifacts_dir is not None:
+            _write_artifacts(artifacts_dir, result)
+
+        return result
+
+    def _execute(
+        self,
+        scope: PreparedScope,
+        prompt: str,
+        *,
+        model: str | None,
+        timeout_seconds: float,
+        input_files: Sequence[Path] = (),
+        no_tools: bool = False,
+        stop_on: Callable[[dict[str, Any]], bool] | None = None,
+    ) -> _Execution:
         command = self._build_command(
             model=model, input_files=input_files, no_tools=no_tools
         )
@@ -112,48 +150,54 @@ class OpenCodeHarness:
                 f"could not start harness command {command[0]!r}"
             ) from error
 
+        stopped = threading.Event()
+        stdout_parts: list[str] = []
+        stderr_parts: list[str] = []
+        io_threads = [
+            threading.Thread(
+                target=_write_prompt,
+                args=(process.stdin, prompt),
+                daemon=True,
+            ),
+            threading.Thread(
+                target=_read_stdout,
+                args=(process.stdout, stdout_parts, stop_on, stopped),
+                daemon=True,
+            ),
+            threading.Thread(
+                target=_drain_stream,
+                args=(process.stderr, stderr_parts),
+                daemon=True,
+            ),
+        ]
+        for thread in io_threads:
+            thread.start()
+
         timed_out = False
         try:
-            stdout, stderr = process.communicate(input=prompt, timeout=timeout_seconds)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            stdout, stderr = process.communicate()
-            timed_out = True
-        duration_ms = round((time.monotonic() - started) * 1000)
-        exit_code = process.returncode if process.returncode is not None else -1
+            while process.poll() is None:
+                if stopped.wait(0.01):
+                    process.kill()
+                    break
+                if time.monotonic() - started >= timeout_seconds:
+                    timed_out = True
+                    process.kill()
+                    break
+            process.wait()
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+            for thread in io_threads:
+                thread.join()
 
-        events = parse_events(stdout)
-        tokens = _tokens(events)
-        assistant_text = _assistant_text(events)
-        loaded_skill_ids = _loaded_skill_ids(events)
-        transcript_markdown = _render_transcript(
-            events,
-            tokens=tokens,
-            duration_ms=duration_ms,
-            exit_code=exit_code,
+        return _Execution(
+            stdout="".join(stdout_parts),
+            stderr="".join(stderr_parts),
+            duration_ms=round((time.monotonic() - started) * 1000),
+            exit_code=process.returncode if process.returncode is not None else -1,
             timed_out=timed_out,
         )
-        output_files = _output_files(scope.path, before)
-        metrics = _metrics(events, output_files, scope.path, transcript_markdown)
-
-        result = RunResult(
-            assistant_text=assistant_text,
-            transcript_jsonl=stdout,
-            transcript_markdown=transcript_markdown,
-            tokens=tokens,
-            duration_ms=duration_ms,
-            loaded_skill_ids=loaded_skill_ids,
-            output_files=output_files,
-            exit_code=exit_code,
-            stderr=stderr,
-            metrics=metrics,
-            timed_out=timed_out,
-        )
-
-        if artifacts_dir is not None:
-            _write_artifacts(artifacts_dir, result)
-
-        return result
 
     def probe_trigger(
         self,
@@ -177,12 +221,15 @@ class OpenCodeHarness:
                 _probe_skill_md(skill_name, description), encoding="utf-8"
             )
             with self.prepare_scope([candidate]) as scope:
-                result = self.run(
+                before = _snapshot(scope.path)
+                execution = self._execute(
                     scope,
                     query,
                     model=model,
                     timeout_seconds=timeout_seconds,
+                    stop_on=lambda event: _event_triggers(event, candidate_id),
                 )
+                result = _run_result(scope.path, before, execution)
         finally:
             shutil.rmtree(source, ignore_errors=True)
 
@@ -260,42 +307,136 @@ def _probe_skill_md(skill_name: str, description: str) -> str:
     )
 
 
+def _run_result(
+    scope_path: Path,
+    before: dict[Path, tuple[int, int]],
+    execution: _Execution,
+) -> RunResult:
+    events = parse_events(execution.stdout)
+    tokens = _tokens(events)
+    transcript_markdown = _render_transcript(
+        events,
+        tokens=tokens,
+        duration_ms=execution.duration_ms,
+        exit_code=execution.exit_code,
+        timed_out=execution.timed_out,
+    )
+    output_files = _output_files(scope_path, before)
+    return RunResult(
+        assistant_text=_assistant_text(events),
+        transcript_jsonl=execution.stdout,
+        transcript_markdown=transcript_markdown,
+        tokens=tokens,
+        duration_ms=execution.duration_ms,
+        loaded_skill_ids=_loaded_skill_ids(events),
+        output_files=output_files,
+        exit_code=execution.exit_code,
+        stderr=execution.stderr,
+        metrics=_metrics(events, output_files, scope_path, transcript_markdown),
+        timed_out=execution.timed_out,
+    )
+
+
 def _triggered(result: RunResult, candidate_id: str) -> bool:
-    if candidate_id in result.loaded_skill_ids:
-        return True
-    for event in parse_events(result.transcript_jsonl):
-        if event.get("type") != "tool_use":
-            continue
-        part = _part(event)
-        if part.get("tool") != "read":
-            continue
-        state = part.get("state")
-        if not isinstance(state, dict):
-            continue
-        inputs = state.get("input")
-        if not isinstance(inputs, dict):
-            continue
-        path = inputs.get("path") or inputs.get("filePath")
-        marker = f".opencode/skills/{candidate_id}"
-        if isinstance(path, str) and marker in path.replace("\\", "/"):
-            return True
-    return False
+    return any(
+        _event_triggers(event, candidate_id)
+        for event in parse_events(result.transcript_jsonl)
+    )
+
+
+def _event_triggers(event: dict[str, Any], candidate_id: str) -> bool:
+    tool_use = _tool_use(event)
+    if tool_use is None:
+        return False
+    tool, inputs = tool_use
+
+    if tool == "skill":
+        return inputs.get("id") == candidate_id
+    if tool != "read":
+        return False
+
+    path = inputs.get("path") or inputs.get("filePath")
+    if not isinstance(path, str):
+        return False
+    normalized = path.replace("\\", "/")
+    marker = f".opencode/skills/{candidate_id}"
+    return normalized.endswith(marker) or f"{marker}/" in normalized
+
+
+def _tool_use(event: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    if event.get("type") != "tool_use":
+        return None
+    part = _part(event)
+    tool = part.get("tool")
+    state = part.get("state")
+    inputs = state.get("input") if isinstance(state, dict) else None
+    if not isinstance(tool, str) or not isinstance(inputs, dict):
+        return None
+    return tool, inputs
+
+
+def _write_prompt(stream: TextIO | None, prompt: str) -> None:
+    if stream is None:
+        return
+    try:
+        stream.write(prompt)
+    except OSError:
+        pass
+    finally:
+        try:
+            stream.close()
+        except OSError:
+            pass
+
+
+def _read_stdout(
+    stream: TextIO | None,
+    parts: list[str],
+    stop_on: Callable[[dict[str, Any]], bool] | None,
+    stopped: threading.Event,
+) -> None:
+    if stream is None:
+        return
+    try:
+        for line in stream:
+            parts.append(line)
+            if stop_on is None or stopped.is_set():
+                continue
+            event = _parse_event(line)
+            if event is not None and stop_on(event):
+                stopped.set()
+    finally:
+        stream.close()
+
+
+def _drain_stream(stream: TextIO | None, parts: list[str]) -> None:
+    if stream is None:
+        return
+    try:
+        parts.append(stream.read())
+    finally:
+        stream.close()
 
 
 def parse_events(transcript_jsonl: str) -> list[dict[str, Any]]:
     """Parse the JSONL stream, ignoring lines that are not JSON objects."""
     events: list[dict[str, Any]] = []
     for line in transcript_jsonl.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(event, dict):
+        event = _parse_event(line)
+        if event is not None:
             events.append(event)
     return events
+
+
+def _parse_event(line: str) -> dict[str, Any] | None:
+    line = line.strip()
+    if not line:
+        return None
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    return event if isinstance(event, dict) else None
 
 
 def _part(event: dict[str, Any]) -> dict[str, Any]:
@@ -321,16 +462,11 @@ def _assistant_text(events: Sequence[dict[str, Any]]) -> str:
 def _loaded_skill_ids(events: Sequence[dict[str, Any]]) -> tuple[str, ...]:
     skill_ids: list[str] = []
     for event in events:
-        if event.get("type") != "tool_use":
+        tool_use = _tool_use(event)
+        if tool_use is None:
             continue
-        part = _part(event)
-        if part.get("tool") != "skill":
-            continue
-        state = part.get("state")
-        if not isinstance(state, dict):
-            continue
-        inputs = state.get("input")
-        if not isinstance(inputs, dict):
+        tool, inputs = tool_use
+        if tool != "skill":
             continue
         skill_id = inputs.get("id")
         if isinstance(skill_id, str) and skill_id and skill_id not in skill_ids:

@@ -2,6 +2,8 @@
 
 Eval definitions live in `<skill>/evals/evals.json`. Each entry has an `id`, a `prompt`, an optional `expected_output`, optional input `files` relative to the skill root, and optional `expectations`. See [the JSON contracts](schemas.md) for the full field definitions.
 
+These are task evals: they measure the output after the skill loads. To measure whether the description makes an agent load the skill, use [trigger evals](trigger-evals.md). Trigger evals do not create workspace iterations.
+
 ## Where runs go
 
 The default workspace is `<skill-name>-workspace/` beside the skill directory. Pass `--workspace` to relocate it; the repository has no workspace setting.

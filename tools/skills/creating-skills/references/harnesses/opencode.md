@@ -126,7 +126,7 @@ The caller owns the rest of the run layout, including normalized run metadata an
 
 ## Trigger probe
 
-`probe_trigger` creates a uniquely named candidate skill, `<slug>-probe-<8 hex>`, from the supplied description, puts it in a deny-all scope, and runs the query. Triggering is detected when the `skill` tool loads the candidate ID. A `read` tool call whose path contains the candidate directory is accepted as a fallback.
+`probe_trigger` creates a uniquely named candidate skill, `<slug>-probe-<8 hex>`, from the supplied description, puts it in a deny-all scope, and runs the query. Triggering is detected when the `skill` tool loads the candidate ID. A `read` tool call whose path is the candidate directory or a file inside it is accepted as a fallback. The adapter stops the process as soon as either event appears; the returned run contains the stream up to that point and is not marked as timed out.
 
 Each probe uses a fresh candidate name and a fresh scope, so ambient skills cannot answer for the candidate.
 
@@ -135,4 +135,4 @@ Each probe uses a fresh candidate name and a fresh scope, so ambient skills cann
 - A parallel eval batch uses one adapter instance and one temporary scope per run, but the runs share the background OpenCode service. Construct `OpenCodeHarness(standalone=True)` when a private server per run matters more than startup cost.
 - Managed system configuration can hard-deny skills or outrank project permission rules. The adapter cannot override that.
 - A trigger probe cleans its scope before returning, so `run.output_files` paths from a probe no longer exist. Use the transcript when debugging a probe.
-- Early termination after the first trigger observation, repeated probe runs, and trigger-rate reporting are the caller's responsibility.
+- Repeated probe runs and trigger-rate reporting are handled by `scripts.trigger_eval`, not the adapter.

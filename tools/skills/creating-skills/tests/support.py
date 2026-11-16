@@ -5,7 +5,8 @@ import shutil
 import sys
 import tempfile
 import textwrap
-from collections.abc import Sequence
+import threading
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -54,17 +55,19 @@ if config.get("stdout_file"):
     sys.stdout.write(Path(config["stdout_file"]).read_text(encoding="utf-8"))
 elif config.get("stdout"):
     sys.stdout.write(config["stdout"])
+sys.stdout.flush()
 
 trigger = config.get("trigger")
 if trigger and skills:
     candidate = skills[0]
     if trigger == "skill":
+        skill_id = config.get("trigger_id", "{candidate}").format(candidate=candidate)
         part = {
             "type": "tool",
             "tool": "skill",
             "state": {
                 "status": "completed",
-                "input": {"id": candidate},
+                "input": {"id": skill_id},
                 "output": f"Loaded {candidate}",
                 "metadata": {},
                 "time": {},
@@ -92,6 +95,9 @@ if trigger and skills:
         "part": part,
     }
     sys.stdout.write(json.dumps(event) + "\\n")
+    sys.stdout.flush()
+    if config.get("trigger_sleep"):
+        time.sleep(config["trigger_sleep"])
 
 for name in config.get("touch", []):
     path = Path(name)
@@ -261,6 +267,85 @@ class RecordingHarness:
         timeout_seconds: float = 120.0,
     ) -> TriggerResult:
         raise NotImplementedError("trigger probes are not used by these tests")
+
+
+class CannedTriggerHarness(RecordingHarness):
+    """A harness double with scripted trigger outcomes per query."""
+
+    def __init__(
+        self, root: Path, outcomes: Mapping[str, Sequence[bool | None]]
+    ) -> None:
+        super().__init__(root)
+        self.outcomes = {query: list(values) for query, values in outcomes.items()}
+        self.probe_calls: list[dict[str, Any]] = []
+        self._lock = threading.Lock()
+
+    def probe_trigger(
+        self,
+        skill_name: str,
+        description: str,
+        query: str,
+        *,
+        model: str | None = None,
+        timeout_seconds: float = 120.0,
+    ) -> TriggerResult:
+        with self._lock:
+            values = self.outcomes.get(query)
+            outcome = values.pop(0) if values else False
+            index = len(self.probe_calls)
+            self.probe_calls.append(
+                {
+                    "skill_name": skill_name,
+                    "description": description,
+                    "query": query,
+                    "model": model,
+                    "timeout_seconds": timeout_seconds,
+                }
+            )
+        if outcome is None:
+            raise RuntimeError(f"probe failed for {query!r}")
+        run = canned_run_result(
+            self.root / "probe",
+            output_name=f"probe-{index}.md",
+            loaded_skill_ids=("candidate",) if outcome else (),
+        )
+        return TriggerResult(
+            triggered=outcome,
+            candidate_skill_id="candidate",
+            run=run,
+        )
+
+
+class BarrierTriggerHarness(RecordingHarness):
+    """A trigger harness that blocks until every probe has started."""
+
+    def __init__(self, root: Path, parties: int) -> None:
+        super().__init__(root)
+        self.barrier = threading.Barrier(parties, timeout=5)
+        self.thread_ids: set[int] = set()
+        self._lock = threading.Lock()
+
+    def probe_trigger(
+        self,
+        skill_name: str,
+        description: str,
+        query: str,
+        *,
+        model: str | None = None,
+        timeout_seconds: float = 120.0,
+    ) -> TriggerResult:
+        with self._lock:
+            self.thread_ids.add(threading.get_ident())
+        self.barrier.wait()
+        run = canned_run_result(
+            self.root / "probe",
+            output_name=f"probe-{threading.get_ident()}.md",
+        )
+        return TriggerResult(
+            triggered=True,
+            candidate_skill_id="candidate",
+            run=run,
+        )
 
 
 class FakeOpenCode:

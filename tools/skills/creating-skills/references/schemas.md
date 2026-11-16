@@ -26,14 +26,16 @@ The `<arm>` directory is `with_skill`, `without_skill`, or `old_skill`. The benc
 ## Contents
 
 1. [evals.json](#evalsjson)
-2. [eval_metadata.json](#eval_metadatajson)
-3. [grading.json](#gradingjson)
-4. [metrics.json](#metricsjson)
-5. [timing.json](#timingjson)
-6. [benchmark.json](#benchmarkjson)
-7. [comparison.json](#comparisonjson)
-8. [analysis.json](#analysisjson)
-9. [feedback.json](#feedbackjson)
+2. [trigger_evals.json](#trigger_evalsjson)
+3. [trigger_eval.json](#trigger_evaljson)
+4. [eval_metadata.json](#eval_metadatajson)
+5. [grading.json](#gradingjson)
+6. [metrics.json](#metricsjson)
+7. [timing.json](#timingjson)
+8. [benchmark.json](#benchmarkjson)
+9. [comparison.json](#comparisonjson)
+10. [analysis.json](#analysisjson)
+11. [feedback.json](#feedbackjson)
 
 ---
 
@@ -67,6 +69,71 @@ Defines the evals for a skill. Located at `<skill>/evals/evals.json`.
 - `evals[].expected_output`: a human-readable description of success.
 - `evals[].files`: optional input file paths relative to the skill root.
 - `evals[].expectations`: verifiable statements. Prose may call them assertions, but the JSON key is always `expectations`.
+
+---
+
+## trigger_evals.json
+
+Defines the description-triggering queries for a skill. Normally located at `<skill>/evals/trigger_evals.json`.
+
+```json
+[
+  {
+    "query": "my boss sent me this xlsx and wants a profit margin column added",
+    "should_trigger": true
+  },
+  {
+    "query": "explain what a profit margin is",
+    "should_trigger": false
+  }
+]
+```
+
+**Fields:**
+
+- `query`: a realistic user prompt, not a topic label.
+- `should_trigger`: `true` when the description should make the agent load the skill, `false` for a near-miss that needs something else.
+
+The document is a JSON array. Queries must be unique and non-empty. See [the trigger eval reference](trigger-evals.md) for how to write a useful set.
+
+---
+
+## trigger_eval.json
+
+Output from `scripts.trigger_eval`. Written to stdout and optionally to a file with `--output`.
+
+```json
+{
+  "skill_name": "example-skill",
+  "description": "The description under test.",
+  "results": [
+    {
+      "query": "my boss sent me this xlsx and wants a profit margin column added",
+      "should_trigger": true,
+      "trigger_rate": 0.667,
+      "triggers": 2,
+      "runs": 3,
+      "errors": 0,
+      "pass": true
+    }
+  ],
+  "summary": {"total": 1, "passed": 1, "failed": 0}
+}
+```
+
+**Fields:**
+
+- `skill_name`: the name from the skill's frontmatter.
+- `description`: the description under test, either from `SKILL.md` or `--description`.
+- `results[]`: one entry per query, in input order.
+  - `query`, `should_trigger`: copied from the query set.
+  - `triggers`, `runs`: how many probes triggered and how many ran.
+  - `errors`: probes that raised and were counted as no trigger.
+  - `trigger_rate`: `triggers / runs`.
+  - `pass`: `true` when the query had no errors and either a should-trigger query reached the threshold or a should-not-trigger query stayed below it.
+- `summary`: `total`, `passed`, and `failed` counts across queries.
+
+The JSON key is `pass`, matching the upstream trigger evaluator. A failed probe counts as no trigger, fails that query, and does not abort the remaining probes. The command exits `0` when every query passes, `1` when any query fails, and `2` when it could not run.
 
 ---
 

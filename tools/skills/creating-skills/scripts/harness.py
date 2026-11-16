@@ -89,9 +89,10 @@ class TriggerResult:
 class Harness(Protocol):
     """The three capabilities the creating-skills scripts require.
 
-    One harness instance may be used for concurrent ``prepare_scope`` and
-    ``run`` calls. Adapters must keep per-run state on the prepared scope or
-    in locals, never in mutable attributes on the adapter.
+    One harness instance may be used for concurrent ``prepare_scope``,
+    ``run``, and ``probe_trigger`` calls. Adapters must keep per-run state on
+    the prepared scope or in locals, never in mutable attributes on the
+    adapter.
     """
 
     def prepare_scope(self, skills: Sequence[Path] = ()) -> PreparedScope:
@@ -121,5 +122,8 @@ class Harness(Protocol):
         model: str | None = None,
         timeout_seconds: float = 120.0,
     ) -> TriggerResult:
-        """Run ``query`` against a candidate skill built from the description."""
+        """Run ``query`` against a candidate skill built from the description.
+
+        Implementations may terminate the run once triggering is observed.
+        """
         ...
