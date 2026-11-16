@@ -11,6 +11,7 @@ from typing import Any
 
 from scripts.workspace import (
     ARMS,
+    eval_directories,
     eval_id_from_directory,
     iteration_number,
     run_id,
@@ -142,7 +143,7 @@ def collect_review(
 def collect_runs(iteration_dir: Path) -> list[dict[str, Any]]:
     """Return one review entry per arm directory in ``iteration_dir``."""
     runs: list[dict[str, Any]] = []
-    for eval_dir in _eval_directories(Path(iteration_dir)):
+    for eval_dir in eval_directories(Path(iteration_dir)):
         metadata = _load_json(eval_dir / "eval_metadata.json") or {}
         for arm in ARMS:
             arm_dir = eval_dir / arm
@@ -309,24 +310,6 @@ def _skill_name(iteration_dir: Path, benchmark: dict[str, Any] | None) -> str:
             if name:
                 return name
     return skill_name_from_workspace(iteration_dir.parent) or "skill"
-
-
-def _eval_directories(iteration_dir: Path) -> list[Path]:
-    return sorted(
-        (
-            path
-            for path in iteration_dir.iterdir()
-            if path.is_dir() and path.name.startswith("eval-")
-        ),
-        key=_eval_directory_key,
-    )
-
-
-def _eval_directory_key(path: Path) -> tuple[int, int, str]:
-    suffix = eval_id_from_directory(path)
-    if suffix.isdigit():
-        return (0, int(suffix), "")
-    return (1, 0, suffix)
 
 
 def _embed_outputs(outputs_dir: Path) -> list[dict[str, Any]]:

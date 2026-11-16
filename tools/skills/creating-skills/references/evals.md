@@ -129,6 +129,31 @@ Grade after the runs finish and the expectations are written. Grading an empty e
 6. Read the optional `eval_feedback`. An assertion that would pass for a wrong output, or an important outcome with no assertion, is a gap to fix in `eval_metadata.json` and `evals/evals.json` before the next iteration. Do not force subjective qualities such as writing style into assertions.
 7. The grader copies `outputs/metrics.json` into `execution_metrics`, copies `timing.json` into `timing`, and summarizes optional `outputs/user_notes.md`. Never substitute output characters for tokens.
 
+## Aggregate the benchmark
+
+Run this from the `creating-skills` skill directory after grading:
+
+```bash
+python -m scripts.benchmark --iteration path/to/my-skill-workspace/iteration-2
+```
+
+Each `<eval>/<arm>/` directory containing a `grading.json` is one run. The aggregator reads `eval_name` from `eval_metadata.json`, computes pass-rate, time, and token mean, standard deviation, minimum, and maximum per configuration, and derives `runs_per_configuration` from the data. It takes `time_seconds` and `tokens` from the arm's timing data, preferring `timing.json` and falling back to the timing copy in `grading.json`; `output_chars` is never a token count. It writes `benchmark.json` and `benchmark.md` at the iteration root.
+
+`with_skill` is the primary arm. The comparison is `old_skill` when present, otherwise `without_skill`; the delta is primary minus baseline, so a positive pass-rate delta is better and a negative time or token delta is better. Options:
+
+```text
+--skill-name NAME     override the name in metadata (default: the workspace name)
+--skill-path PATH     record the skill under test
+--executor-model ID   record the model used for the eval arms
+--analyzer-model ID   record the model used for the analysis pass
+```
+
+See [the benchmark contract](schemas.md#benchmarkjson). The review page picks up `<iteration>/benchmark.json` automatically; no separate flag is needed. Re-aggregating replaces `notes`, so run the analyst pass after the final aggregation.
+
+## Analyze benchmark patterns
+
+After benchmark aggregation, use the "Analyze benchmark results" half of [the analyzer instructions](../agents/analyzer.md). It reads `benchmark.json` and returns a JSON array of strings. Place those strings in `benchmark.json` under `notes`. This pass reports patterns and anomalies across runs; it does not suggest skill changes.
+
 ## Review the runs
 
 Generate the review page after grading and before judging the outputs yourself. Run this from the `creating-skills` skill directory:
@@ -160,10 +185,6 @@ Use a blind comparison when close versions need a more rigorous judgment than th
 3. Run [the comparator instructions](../agents/comparator.md) in a fresh context with `output_a_path`, `output_b_path`, the eval prompt, and the expectations. It writes `<eval>/comparison.json`; the `expectation_results` field records its own A/B verdicts.
 4. Unblind the result with your private mapping. If the comparator returned a tie, stop: there is no winner to explain. Otherwise run [the analyzer instructions](../agents/analyzer.md) with the winning side, both skills, both transcripts, and the comparison file. It writes `<eval>/analysis.json` and explains why the winner won.
 5. Delete the neutral copies. Use the analysis to improve the losing version in generalizable ways, not to tune the test prompt.
-
-## Analyze benchmark patterns
-
-After benchmark aggregation, use the "Analyze benchmark results" half of [the analyzer instructions](../agents/analyzer.md). It reads `benchmark.json` and returns a JSON array of strings. Place those strings in `benchmark.json` under `notes`. This pass reports patterns and anomalies across runs; it does not suggest skill changes.
 
 ## Debug one arm
 

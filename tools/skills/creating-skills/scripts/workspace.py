@@ -133,6 +133,28 @@ def eval_id_from_directory(eval_dir: Path) -> str:
     return suffix
 
 
+def eval_id_sort_key(eval_id: int | str) -> tuple[int, int, str]:
+    """Return a stable sort key for an eval identifier."""
+    if isinstance(eval_id, int) and not isinstance(eval_id, bool):
+        return (0, eval_id, "")
+    value = str(eval_id)
+    if value.isdigit():
+        return (0, int(value), "")
+    return (1, 0, value)
+
+
+def eval_directories(iteration_dir: Path) -> list[Path]:
+    """Return the canonical eval directories in stable eval-ID order."""
+    return sorted(
+        (
+            path
+            for path in Path(iteration_dir).iterdir()
+            if path.is_dir() and path.name.startswith("eval-")
+        ),
+        key=lambda path: eval_id_sort_key(eval_id_from_directory(path)),
+    )
+
+
 def validate_arm(arm: str) -> str:
     """Return ``arm`` if it is one of the canonical arm names."""
     if arm not in ARMS:

@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+from scripts.benchmark import write_benchmark
 from scripts.review import main, write_review
 from scripts.workspace import run_id, write_eval_metadata, write_run_artifacts
 
@@ -309,6 +310,37 @@ class ReviewPageTests(unittest.TestCase):
         data = embedded_data(html)
 
         self.assertEqual(data["benchmark"], benchmark)
+        self.assertIn('id="benchmark-tab"', html)
+        self.assertIn('id="benchmark-content"', html)
+
+    def test_review_page_displays_the_generated_benchmark(self) -> None:
+        iteration = self.workspace / "iteration-2"
+        self.write_run(iteration, eval_id=1, grading=_GRADING)
+        baseline_grading = {
+            "expectations": _GRADING["expectations"],
+            "summary": {"passed": 0, "failed": 2, "total": 2, "pass_rate": 0.0},
+        }
+        self.write_run(
+            iteration, eval_id=1, arm="without_skill", grading=baseline_grading
+        )
+
+        write_benchmark(
+            iteration,
+            skill_name=_SKILL_NAME,
+            timestamp="2026-01-15T10:30:00Z",
+        )
+        page = write_review(iteration)
+        html = page.read_text(encoding="utf-8")
+        data = embedded_data(html)
+
+        self.assertEqual(data["benchmark"]["metadata"]["skill_name"], _SKILL_NAME)
+        self.assertEqual(
+            [run["configuration"] for run in data["benchmark"]["runs"]],
+            ["with_skill", "without_skill"],
+        )
+        self.assertEqual(
+            data["benchmark"]["run_summary"]["delta"]["pass_rate"], "+0.50"
+        )
         self.assertIn('id="benchmark-tab"', html)
         self.assertIn('id="benchmark-content"', html)
 

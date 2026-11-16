@@ -7,8 +7,10 @@ from scripts.harness import PreparedScope
 from scripts.workspace import (
     create_iteration,
     default_workspace,
+    eval_directories,
     eval_directory,
     eval_id_from_directory,
+    eval_id_sort_key,
     iteration_number,
     preserve_inputs,
     resolve_inputs,
@@ -108,6 +110,24 @@ class WorkspaceLayoutTests(unittest.TestCase):
     def test_eval_id_from_directory_rejects_a_non_eval_name(self) -> None:
         with self.assertRaisesRegex(ValueError, "not an eval directory"):
             eval_id_from_directory(self.root / "inputs")
+
+    def test_eval_directories_sort_numeric_ids_before_named_ids(self) -> None:
+        iteration = self.workspace / "iteration-1"
+        for name in ("eval-10", "eval-ocean", "eval-2", "notes"):
+            (iteration / name).mkdir(parents=True)
+
+        self.assertEqual(
+            [path.name for path in eval_directories(iteration)],
+            ["eval-2", "eval-10", "eval-ocean"],
+        )
+
+    def test_eval_id_sort_key_orders_numbers_before_names(self) -> None:
+        values: list[int | str] = ["ocean", 10, "2", 1]
+
+        self.assertEqual(
+            sorted(values, key=eval_id_sort_key),
+            [1, "2", 10, "ocean"],
+        )
 
     def test_run_id_combines_the_eval_and_arm(self) -> None:
         self.assertEqual(run_id(1, "with_skill"), "eval-1-with_skill")
