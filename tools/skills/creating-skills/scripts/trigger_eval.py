@@ -77,6 +77,22 @@ class TriggerEvaluation:
             },
         }
 
+    def restrict(self, queries: Sequence["TriggerQuery"]) -> "TriggerEvaluation":
+        """Return this evaluation restricted to ``queries``, in their order."""
+        by_query = {result.query: result for result in self.results}
+        results = tuple(by_query[query.query] for query in queries)
+        passed = sum(1 for result in results if result.passed)
+        return TriggerEvaluation(
+            skill_name=self.skill_name,
+            description=self.description,
+            results=results,
+            summary=TriggerSummary(
+                total=len(results),
+                passed=passed,
+                failed=len(results) - passed,
+            ),
+        )
+
 
 def load_trigger_queries(path: Path) -> tuple[TriggerQuery, ...]:
     """Load and validate a trigger eval set.

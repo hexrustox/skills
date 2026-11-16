@@ -27,6 +27,18 @@ Write realistic prompts, not topic labels. Include file paths, column names, abb
 - **Should-not-trigger queries** (8–10) are near-misses that share keywords or concepts with the skill but need something else. Avoid obviously unrelated prompts; they do not test the boundary.
 - Make the prompts substantive. A one-step request the agent can handle with a basic tool may not consult a skill even when the description matches.
 
+## Review generated queries
+
+A generated set benefits from a review before it drives an optimization loop. Write a static page from the skill and query set:
+
+```bash
+python -m scripts.trigger_review \
+  --skill path/to/my-skill \
+  --eval-set path/to/my-skill/evals/trigger_evals.json
+```
+
+The command writes `trigger-review.html` beside the skill and lets a reviewer edit query text, toggle should-trigger, add queries, and delete queries. The returned set is downloaded or copied as JSON; save it over the eval set. The page is standalone and needs no server. See [description optimization](description-optimization.md) for the full loop that uses the reviewed set.
+
 ## Run the evaluation
 
 Run this from the `creating-skills` skill directory so the `scripts` package resolves:

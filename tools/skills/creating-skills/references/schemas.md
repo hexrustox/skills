@@ -23,6 +23,8 @@ This document defines the JSON contracts used by `creating-skills`. Paths are re
 
 The `<arm>` directory is `with_skill`, `without_skill`, or `old_skill`. The benchmark files live at the iteration root. See [the eval workspace reference](evals.md) for the full layout and the run commands. `run.json` and `error.json` are workspace artifacts rather than grading contracts; they are described in that reference. `review.html` embeds these artifacts for human review, and `feedback.json` records the result of that review.
 
+Description optimization has its own layout beside the skill. See [the description optimization reference](description-optimization.md) and the [results contract](#description-optimization-results).
+
 ## Contents
 
 1. [evals.json](#evalsjson)
@@ -36,6 +38,7 @@ The `<arm>` directory is `with_skill`, `without_skill`, or `old_skill`. The benc
 9. [comparison.json](#comparisonjson)
 10. [analysis.json](#analysisjson)
 11. [feedback.json](#feedbackjson)
+12. [description optimization results](#description-optimization-results)
 
 ---
 
@@ -134,6 +137,159 @@ Output from `scripts.trigger_eval`. Written to stdout and optionally to a file w
 - `summary`: `total`, `passed`, and `failed` counts across queries.
 
 The JSON key is `pass`, matching the upstream trigger evaluator. A failed probe counts as no trigger, fails that query, and does not abort the remaining probes. The command exits `0` when every query passes, `1` when any query fails, and `2` when it could not run.
+
+---
+
+## description optimization results
+
+`scripts.description_loop` writes the full loop result to `<skill-name>-workspace/description-optimization/<timestamp>/results.json` and prints the same document to stdout. The [description optimization reference](description-optimization.md) explains the workflow and the report layout.
+
+```json
+{
+  "skill_name": "example-skill",
+  "original_description": "Original description under test.",
+  "best_description": "Original description under test.",
+  "best_score": "1/2",
+  "best_train_score": "1/2",
+  "best_test_score": "1/2",
+  "best_iteration": 1,
+  "final_description": "Original description under test.",
+  "exit_reason": "max_iterations (1)",
+  "iterations_run": 1,
+  "holdout": 0.5,
+  "train_size": 2,
+  "test_size": 2,
+  "model": "provider/model",
+  "history": [
+    {
+      "iteration": 1,
+      "description": "Original description under test.",
+      "train_passed": 1,
+      "train_failed": 1,
+      "train_total": 2,
+      "train_results": [
+        {
+          "query": "my boss sent me this xlsx and wants a profit margin column added",
+          "should_trigger": true,
+          "trigger_rate": 1.0,
+          "triggers": 3,
+          "runs": 3,
+          "errors": 0,
+          "pass": true
+        },
+        {
+          "query": "write a poem about summer",
+          "should_trigger": false,
+          "trigger_rate": 0.667,
+          "triggers": 2,
+          "runs": 3,
+          "errors": 0,
+          "pass": false
+        }
+      ],
+      "test_passed": 1,
+      "test_failed": 1,
+      "test_total": 2,
+      "test_results": [
+        {
+          "query": "add a profit margin column to the attached sheet",
+          "should_trigger": true,
+          "trigger_rate": 1.0,
+          "triggers": 3,
+          "runs": 3,
+          "errors": 0,
+          "pass": true
+        },
+        {
+          "query": "what does profit margin mean",
+          "should_trigger": false,
+          "trigger_rate": 1.0,
+          "triggers": 3,
+          "runs": 3,
+          "errors": 0,
+          "pass": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Fields:**
+
+- `skill_name`: the name from the skill's frontmatter.
+- `original_description`: the description the loop started from, after any `--description` override.
+- `best_description`: the attempt selected by test score. Ties keep the earlier attempt.
+- `best_score`: the selected test score as `passed/total`.
+- `best_train_score`, `best_test_score`: the selected attempt's train and test scores.
+- `best_iteration`: the iteration number of the selected attempt.
+- `final_description`: the description produced by the last evaluated attempt. It is not necessarily the best description.
+- `exit_reason`: `all_passed (iteration N)`, `max_iterations (N)`, or `optimizer_error (<message>)` when the optimizer or its rewrite failed after at least one attempt was evaluated.
+- `iterations_run`: the number of evaluated descriptions.
+- `holdout`, `train_size`, `test_size`: the split configuration and sizes. `holdout` must be greater than 0 and less than 1.
+- `model`: the required model passed to the trigger probes and the optimizer.
+- `history[]`: one entry per evaluated description.
+  - `iteration`, `description`: the attempt identity.
+  - `train_passed`, `train_failed`, `train_total`, `train_results`: train view used by the report and, in blinded form, by the optimizer.
+  - `test_passed`, `test_failed`, `test_total`, `test_results`: held-out view used for selection. These fields are never passed into the improvement prompt.
+
+The query result entries inside `train_results` and `test_results` use the [trigger_eval.json](#trigger_evaljson) fields.
+
+### Logs
+
+The timestamped results directory also contains:
+
+```text
+logs/
+├── loop.log
+├── improve_iter_<N>.json
+├── improve_iter_<N>.transcript.jsonl
+├── improve_iter_<N>.transcript.md
+├── improve_iter_<N>.rewrite.transcript.jsonl   # only when a rewrite ran
+└── improve_iter_<N>.rewrite.transcript.md      # only when a rewrite ran
+```
+
+`loop.log` is a plain-text record of the split, per-iteration scores, proposals, and the final selection. `improve_iter_<N>.json` records one optimizer call:
+
+```json
+{
+  "iteration": 1,
+  "model": "provider/model",
+  "prompt": "The full improvement prompt.",
+  "response": "The optimizer's raw response.",
+  "parsed_description": "The extracted proposal.",
+  "char_count": 812,
+  "over_limit": false,
+  "rewrite_prompt": null,
+  "rewrite_response": null,
+  "rewrite_description": null,
+  "rewrite_char_count": null,
+  "final_description": "The proposal after any rewrite.",
+  "error": null,
+  "run": {
+    "model": "provider/model",
+    "no_tools": true,
+    "loaded_skill_ids": [],
+    "tokens": {
+      "input": 1200,
+      "output": 180,
+      "reasoning": 0,
+      "cache_read": 0,
+      "cache_write": 0,
+      "total": 1380
+    },
+    "duration_ms": 4200,
+    "exit_code": 0,
+    "stderr": "",
+    "timed_out": false
+  },
+  "rewrite_run": null
+}
+```
+
+When the first proposal is over 1024 characters, the rewrite fields and `rewrite_run` are populated. The log is written even when the rewrite remains over 1024 characters or the rewrite call fails; `error` records the failure when there is one. The loop then stops with the best attempt evaluated so far and records `optimizer_error (...)` in `exit_reason`. The transcript files are the raw JSONL stream and the adapter-rendered Markdown transcript for each optimizer run.
+
+The static `live.html` and `report.html` files are presentation surfaces generated from this JSON. They are not additional contracts.
 
 ---
 

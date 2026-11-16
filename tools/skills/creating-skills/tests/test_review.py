@@ -11,7 +11,7 @@ from scripts.benchmark import write_benchmark
 from scripts.review import main, write_review
 from scripts.workspace import run_id, write_eval_metadata, write_run_artifacts
 
-from tests.support import canned_run_result
+from tests.support import canned_run_result, embedded_data
 
 _SKILL_NAME = "example-skill"
 _GRADING = {
@@ -29,15 +29,6 @@ _GRADING = {
     ],
     "summary": {"passed": 1, "failed": 1, "total": 2, "pass_rate": 0.5},
 }
-
-
-def embedded_data(html: str) -> dict[str, Any]:
-    """Return the data the page embeds for its scripts."""
-    marker = "const EMBEDDED_DATA = "
-    start = html.index(marker) + len(marker)
-    data, _end = json.JSONDecoder().raw_decode(html[start:])
-    assert isinstance(data, dict)
-    return data
 
 
 class ReviewPageTests(unittest.TestCase):

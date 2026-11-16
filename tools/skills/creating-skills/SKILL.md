@@ -152,6 +152,17 @@ Read the [harness adapter index](references/harnesses/README.md) before running 
 
 Read [the trigger eval reference](references/trigger-evals.md) for the query format, command, output contract, and how the threshold decides pass/fail. Use `--description` to compare a candidate description before editing `SKILL.md`.
 
+### Optimize the description
+
+When the description fails to trigger, optimize it instead of guessing. The optimizer needs a reviewed query set and a model.
+
+1. **Generate the query set.** Write about 20 realistic queries: 8–10 should-trigger and 8–10 should-not-trigger near-misses. Save them at `<skill>/evals/trigger_evals.json`.
+2. **Review them in a static page.** Run `python -m scripts.trigger_review --skill path/to/my-skill` from the `creating-skills` skill directory. The page lets the reviewer edit, add, delete, and reclassify queries and returns the set by download or clipboard. It needs no server.
+3. **Run the loop.** Run `python -m scripts.description_loop --skill-path path/to/my-skill --eval-set path/to/my-skill/evals/trigger_evals.json --model provider/model`. The model argument is required. The loop holds out a test split, improves from train failures only, runs the optimizer without tools and with every skill denied, enforces the 1024-character limit with a rewrite safety net, and selects the best attempt by test score.
+4. **Apply the result.** Read `best_description` from `results.json`, show the user the before/after descriptions with train and test scores, and update the `description` in `SKILL.md`. Re-run the trigger evaluator to confirm the applied description.
+
+The loop writes `live.html`, the final `report.html`, `results.json`, and prompts, responses, and transcripts under `logs/` in a timestamped folder beside the skill. Read [the description optimization reference](references/description-optimization.md) for the full workflow, options, output layout, and how to avoid overfitting.
+
 Done when the trigger rates and task evals both support the current description, or the failures point to a change in the description.
 
 ## Blind comparison

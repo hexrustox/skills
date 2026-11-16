@@ -258,6 +258,24 @@ class TriggerEvaluationTests(unittest.TestCase):
                 trigger_threshold=1.5,
             )
 
+    def test_restrict_returns_the_requested_queries_and_summary(self) -> None:
+        evaluation = evaluate_trigger(
+            self.harness,
+            "example-skill",
+            "Does example work.",
+            self.queries,
+        )
+
+        restricted = evaluation.restrict((self.queries[3], self.queries[0]))
+
+        self.assertEqual(
+            [result.query for result in restricted.results],
+            [self.queries[3].query, self.queries[0].query],
+        )
+        self.assertEqual(restricted.summary.total, 2)
+        self.assertEqual(restricted.summary.passed, 1)
+        self.assertEqual(restricted.summary.failed, 1)
+
     def test_document_uses_the_stable_json_contract(self) -> None:
         evaluation = evaluate_trigger(
             self.harness,

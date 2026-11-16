@@ -7,6 +7,7 @@ import tempfile
 import textwrap
 import threading
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -132,6 +133,15 @@ def write_skill(root: Path, name: str) -> Path:
 def fixture(name: str) -> Path:
     """Return the path of an OpenCode JSONL fixture."""
     return Path(__file__).resolve().parent / "fixtures" / "opencode" / name
+
+
+def embedded_data(html: str, marker: str = "const EMBEDDED_DATA = ") -> dict[str, Any]:
+    """Return the JSON object a standalone page embeds after ``marker``."""
+    start = html.index(marker) + len(marker)
+    data, _end = json.JSONDecoder().raw_decode(html[start:])
+    if not isinstance(data, dict):
+        raise TypeError("embedded data must be a JSON object")
+    return data
 
 
 def write_evals(skill: Path, evals: list[dict[str, Any]]) -> Path:
@@ -267,6 +277,37 @@ class RecordingHarness:
         timeout_seconds: float = 120.0,
     ) -> TriggerResult:
         raise NotImplementedError("trigger probes are not used by these tests")
+
+
+class ScriptedCompletionHarness(RecordingHarness):
+    """Return scripted assistant text from each completion run."""
+
+    def __init__(self, root: Path, responses: list[str]) -> None:
+        super().__init__(root)
+        self.responses = list(responses)
+
+    def run(
+        self,
+        scope: PreparedScope,
+        prompt: str,
+        *,
+        model: str | None = None,
+        timeout_seconds: float = 600.0,
+        input_files: Sequence[Path] = (),
+        no_tools: bool = False,
+        artifacts_dir: Path | None = None,
+    ) -> RunResult:
+        response = self.responses.pop(0)
+        super().run(
+            scope,
+            prompt,
+            model=model,
+            timeout_seconds=timeout_seconds,
+            input_files=input_files,
+            no_tools=no_tools,
+            artifacts_dir=artifacts_dir,
+        )
+        return replace(canned_run_result(scope.path), assistant_text=response)
 
 
 class CannedTriggerHarness(RecordingHarness):

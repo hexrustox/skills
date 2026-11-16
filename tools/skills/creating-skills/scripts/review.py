@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from scripts.html_embed import embed_json
 from scripts.workspace import (
     ARMS,
     eval_directories,
@@ -81,12 +82,7 @@ def write_review(
     marker = "/*__EMBEDDED_DATA__*/"
     if marker not in template:
         raise ValueError(f"review template {str(_TEMPLATE_PATH)!r} has no data marker")
-    embedded = (
-        json.dumps(data, ensure_ascii=False)
-        .replace("</", "<\\/")
-        .replace("\u2028", "\\u2028")
-        .replace("\u2029", "\\u2029")
-    )
+    embedded = embed_json(data)
     html = template.replace(marker, f"const EMBEDDED_DATA = {embedded};")
     destination = (
         Path(output_path)
