@@ -161,6 +161,29 @@ class OpenCodeRunTests(unittest.TestCase):
         self.assertEqual(result.metrics.output_chars, len("The answer.\n"))
         self.assertGreater(result.metrics.transcript_chars, 0)
 
+    def test_run_ignores_a_failed_skill_load(self) -> None:
+        event = {
+            "type": "tool_use",
+            "timestamp": 3,
+            "sessionID": "ses_test",
+            "part": {
+                "type": "tool",
+                "tool": "skill",
+                "state": {
+                    "status": "error",
+                    "input": {"id": "example-skill"},
+                    "error": "Unable to load skill example-skill",
+                },
+            },
+        }
+        self.fake.configure(stdout=json.dumps(event) + "\n")
+
+        result = self.harness.run(self.scope, "Do the thing")
+
+        self.assertEqual(result.loaded_skill_ids, ())
+        self.assertEqual(result.metrics.tool_calls, {"skill": 1})
+        self.assertEqual(result.metrics.errors_encountered, 1)
+
     def test_run_preserves_errors_and_nonzero_exit(self) -> None:
         self.fake.configure(
             stdout_file=str(fixture("error.jsonl")),
@@ -340,6 +363,18 @@ class OpenCodeTriggerTests(unittest.TestCase):
         )
 
         self.assertFalse(result.triggered)
+
+    def test_probe_ignores_a_failed_skill_load(self) -> None:
+        for trigger in ("skill", "read"):
+            with self.subTest(trigger=trigger):
+                self.fake.configure(trigger=trigger, trigger_status="error")
+
+                result = self.harness.probe_trigger(
+                    "example-skill", "Does example work.", "Do the thing"
+                )
+
+                self.assertFalse(result.triggered)
+                self.assertEqual(result.run.loaded_skill_ids, ())
 
     def test_probe_reports_no_trigger_when_only_text_appears(self) -> None:
         self.fake.configure(

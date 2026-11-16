@@ -39,6 +39,51 @@ The port keeps the upstream authoring and improvement loop but removes or rewrit
 - Added the static review page generator at `tools/skills/creating-skills/scripts/review.py` and its template at `tools/skills/creating-skills/assets/review.html`. It writes a standalone `review.html` from normalized run data, matches previous runs by stable identity, and downloads or copies `feedback.json`; the upstream HTTP server, port handling, and browser launch were not ported.
 - Eval, grading, comparison, analysis, benchmark, and description-tuning operations go through a harness adapter rather than hardcoded commands.
 
+## Integration checks
+
+Run these from the repository root before closing an integration pass.
+
+Neutrality: the port must not reference another harness except in the provenance note and the adapter documentation. The upstream license keeps its copyright line, so `LICENSE.txt` is excluded from the grep:
+
+```bash
+git grep -niE 'claude|cowork|present_files|\.claude|anthropic' -- \
+  tools/skills/creating-skills \
+  ':!tools/skills/creating-skills/LICENSE.txt'
+```
+
+A repo-wide check must also exclude the provenance note, `.agents/`, and `skills-lock.json`:
+
+```bash
+git grep -niE 'claude|cowork|present_files|\.claude|anthropic' -- \
+  . \
+  ':!.agents' \
+  ':!skills-lock.json' \
+  ':!docs/agents/creating-skills-maintenance.md' \
+  ':!tools/skills/creating-skills/LICENSE.txt'
+```
+
+Packaging must be absent:
+
+```bash
+git ls-files \
+  'tools/skills/creating-skills/**/*.skill' \
+  'tools/skills/creating-skills/**/package*' \
+  'tools/skills/creating-skills/**/quick_validate*'
+```
+
+Run the full checks from `tools/`:
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+uv run python -m unittest discover -s skills/creating-skills/tests -t skills/creating-skills
+```
+
+For the manual smoke, create a disposable skill outside the repository with one eval case and one trigger query. Run `scripts.eval_batch` with an explicit model, draft the expectations in `eval_metadata.json`, grade both arms, run `scripts.benchmark`, and generate `scripts.review`. Run `scripts.trigger_eval` with `--runs-per-query 1`. Run a second batch to a new iteration, save `feedback.json` in the first iteration, generate the second review page, and confirm the previous outputs and feedback match by `eval-<ID>-<arm>` identity. From the repository root, run an `opencode --standalone run` prompt that lists the available skill IDs and confirm `creating-skills` appears while the vendored `skill-creator` does not.
+
+The adapter's scope is a skill-permission boundary, not a filesystem sandbox; see the OpenCode adapter limits before treating a baseline run as proof that the agent never saw the skill source.
+
 ## Diffing an upstream update
 
 1. Update the vendored snapshot:

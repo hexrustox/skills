@@ -67,7 +67,7 @@ if trigger and skills:
             "type": "tool",
             "tool": "skill",
             "state": {
-                "status": "completed",
+                "status": config.get("trigger_status", "completed"),
                 "input": {"id": skill_id},
                 "output": f"Loaded {candidate}",
                 "metadata": {},
@@ -82,7 +82,7 @@ if trigger and skills:
             "type": "tool",
             "tool": "read",
             "state": {
-                "status": "completed",
+                "status": config.get("trigger_status", "completed"),
                 "input": {"path": read_path},
                 "output": "skill contents",
                 "metadata": {},

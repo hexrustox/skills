@@ -105,7 +105,7 @@ Lines that are not JSON objects are preserved in the raw transcript but ignored 
 ## Normalization
 
 - **Assistant text** joins every `text` event in stream order, separated by blank lines.
-- **Loaded skill IDs** come from `tool_use` events whose tool is `skill`; the ID is `part.state.input.id`. Duplicates are removed and first-load order is preserved.
+- **Loaded skill IDs** come from `tool_use` events whose tool is `skill` and whose `part.state.status` is `completed`; the ID is `part.state.input.id`. Failed loads are not reported. Duplicates are removed and first-load order is preserved.
 - **Token totals** sum every `step_finish` event. The total is `input + output + reasoning + cache.read + cache.write`, matching OpenCode's own token accounting.
 - **Duration** is wall-clock milliseconds from process start to process exit or timeout.
 - **Output files** are project files that are new or changed during the run. `.opencode/`, `.git/`, and `opencode.json` are excluded because they belong to the harness, not the agent; a skill that writes into `.opencode/` will not have those files reported as outputs.
@@ -126,7 +126,7 @@ The caller owns the rest of the run layout, including normalized run metadata an
 
 ## Trigger probe
 
-`probe_trigger` creates a uniquely named candidate skill, `<slug>-probe-<8 hex>`, from the supplied description, puts it in a deny-all scope, and runs the query. Triggering is detected when the `skill` tool loads the candidate ID. A `read` tool call whose path is the candidate directory or a file inside it is accepted as a fallback. The adapter stops the process as soon as either event appears; the returned run contains the stream up to that point and is not marked as timed out.
+`probe_trigger` creates a uniquely named candidate skill, `<slug>-probe-<8 hex>`, from the supplied description, puts it in a deny-all scope, and runs the query. Triggering is detected when the `skill` tool successfully loads the candidate ID. A `read` tool call whose path is the candidate directory or a file inside it is accepted as a fallback when the read completes. Failed loads and failed reads do not trigger. The adapter stops the process as soon as either event appears; the returned run contains the stream up to that point and is not marked as timed out.
 
 Each probe uses a fresh candidate name and a fresh scope, so ambient skills cannot answer for the candidate.
 
@@ -134,5 +134,6 @@ Each probe uses a fresh candidate name and a fresh scope, so ambient skills cann
 
 - A parallel eval batch uses one adapter instance and one temporary scope per run, but the runs share the background OpenCode service. Construct `OpenCodeHarness(standalone=True)` when a private server per run matters more than startup cost.
 - Managed system configuration can hard-deny skills or outrank project permission rules. The adapter cannot override that.
+- The scope is a project and skill-permission boundary, not a filesystem sandbox. Shell and read tools can reach paths outside the temporary project when the surrounding configuration allows it. A baseline that searches the filesystem can still read the skill source under test; `loaded_skill_ids` proves the skill tool did not load, not that the agent never saw the skill.
 - A trigger probe cleans its scope before returning, so `run.output_files` paths from a probe no longer exist. Use the transcript when debugging a probe.
 - Repeated probe runs and trigger-rate reporting are handled by `scripts.trigger_eval`, not the adapter.

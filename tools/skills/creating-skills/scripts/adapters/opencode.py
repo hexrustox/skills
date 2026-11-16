@@ -346,7 +346,7 @@ def _triggered(result: RunResult, candidate_id: str) -> bool:
 
 def _event_triggers(event: dict[str, Any], candidate_id: str) -> bool:
     tool_use = _tool_use(event)
-    if tool_use is None:
+    if tool_use is None or not _tool_completed(event):
         return False
     tool, inputs = tool_use
 
@@ -373,6 +373,12 @@ def _tool_use(event: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
     if not isinstance(tool, str) or not isinstance(inputs, dict):
         return None
     return tool, inputs
+
+
+def _tool_completed(event: dict[str, Any]) -> bool:
+    """Return whether the event's tool call completed successfully."""
+    state = _part(event).get("state")
+    return isinstance(state, dict) and state.get("status") == "completed"
 
 
 def _write_prompt(stream: TextIO | None, prompt: str) -> None:
@@ -463,7 +469,7 @@ def _loaded_skill_ids(events: Sequence[dict[str, Any]]) -> tuple[str, ...]:
     skill_ids: list[str] = []
     for event in events:
         tool_use = _tool_use(event)
-        if tool_use is None:
+        if tool_use is None or not _tool_completed(event):
             continue
         tool, inputs = tool_use
         if tool != "skill":
