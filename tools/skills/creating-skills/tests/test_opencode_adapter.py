@@ -73,6 +73,22 @@ class OpenCodeScopeTests(unittest.TestCase):
             [{"action": "skill", "resource": "*", "effect": "deny"}],
         )
 
+    def test_scope_denies_every_external_directory(self) -> None:
+        skill = write_skill(self.root, "example-skill")
+
+        for scope in (self.prepare(), self.prepare(skill)):
+            with self.subTest(skill_ids=scope.skill_ids):
+                self.assertEqual(
+                    self.read_config(scope)["policies"],
+                    [
+                        {
+                            "action": "tool.use",
+                            "resource": "external_directory:*",
+                            "effect": "deny",
+                        }
+                    ],
+                )
+
     def test_scope_defines_a_no_tools_agent(self) -> None:
         scope = self.prepare()
 
@@ -329,6 +345,16 @@ class OpenCodeTriggerTests(unittest.TestCase):
                     "resource": result.candidate_skill_id,
                     "effect": "allow",
                 },
+            ],
+        )
+        self.assertEqual(
+            invocation["policies"],
+            [
+                {
+                    "action": "tool.use",
+                    "resource": "external_directory:*",
+                    "effect": "deny",
+                }
             ],
         )
 

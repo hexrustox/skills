@@ -41,6 +41,7 @@ invocation = {
     "config_content": os.environ.get("OPENCODE_CONFIG_CONTENT"),
     "skills": skills,
     "permissions": config_doc.get("permissions", []),
+    "policies": config_doc.get("policies", []),
     "files": {
         path: Path(path).read_text(encoding="utf-8", errors="replace")
         for index, path in enumerate(sys.argv[1:])

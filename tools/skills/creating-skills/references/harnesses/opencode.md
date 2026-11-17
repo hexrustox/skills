@@ -18,7 +18,7 @@ harness = get_harness("opencode")
 
 The adapter creates a temporary project under the system temp directory, outside the repository. Each requested skill is copied into `<project>/.opencode/skills/<skill-id>/`, preserving references, scripts, and assets. The skill ID is the directory name, because OpenCode derives skill IDs from paths rather than frontmatter.
 
-The project config denies every skill and then allows only the requested IDs:
+The project config denies every skill and then allows only the requested IDs. It also hard-denies tool access to paths outside the temporary project:
 
 ```json
 {
@@ -26,6 +26,13 @@ The project config denies every skill and then allows only the requested IDs:
   "permissions": [
     { "action": "skill", "resource": "*", "effect": "deny" },
     { "action": "skill", "resource": "example-skill", "effect": "allow" }
+  ],
+  "policies": [
+    {
+      "action": "tool.use",
+      "resource": "external_directory:*",
+      "effect": "deny"
+    }
   ],
   "agents": {
     "creating-skills-no-tools": {
@@ -38,7 +45,11 @@ The project config denies every skill and then allows only the requested IDs:
 }
 ```
 
-A no-skill scope keeps the deny-all rule and leaves `.opencode/skills` empty. This hides skills from global config, compatibility directories, and explicit skill sources rather than relying on those sources being absent; OpenCode has no per-project switch that removes every ambient source. It is the permission rule, not the empty project, that guarantees the scope contains exactly the requested skill.
+`external_directory` is the V2 check for paths outside the active Location and worktree. Encode it as a `tool.use` policy rather than a permission: policies are binary hard denials applied after permissions and saved approvals, so a global rule that allows `/tmp/*` or `read: *` cannot re-open the scope. Use OpenCode 2.2.1 or newer, which enforces `tool.use` policies.
+
+A no-skill scope keeps the deny-all rule, leaves `.opencode/skills` empty, and keeps the external-directory policy. This hides skills from global config, compatibility directories, and explicit skill sources rather than relying on those sources being absent; OpenCode has no per-project switch that removes every ambient source. It is the permission rule, not the empty project, that guarantees the scope contains exactly the requested skill. The policy keeps the live skill source, old snapshots, the eval workspace, and sibling temporary scopes outside the run.
+
+The adapter applies the external-directory policy to every prepared scope, including the with-skill arm and trigger probes. The copied skill and staged inputs are inside the scope, so they remain readable and writable.
 
 ## Invocation
 
@@ -134,6 +145,9 @@ Each probe uses a fresh candidate name and a fresh scope, so ambient skills cann
 
 - A parallel eval batch uses one adapter instance and one temporary scope per run, but the runs share the background OpenCode service. Construct `OpenCodeHarness(standalone=True)` when a private server per run matters more than startup cost.
 - Managed system configuration can hard-deny skills or outrank project permission rules. The adapter cannot override that.
-- The scope is a project and skill-permission boundary, not a filesystem sandbox. Shell and read tools can reach paths outside the temporary project when the surrounding configuration allows it. A baseline that searches the filesystem can still read the skill source under test; `loaded_skill_ids` proves the skill tool did not load, not that the agent never saw the skill.
+- The scope denies tool-mediated access to every path outside the temporary project. The hard `tool.use external_directory:*` policy covers `read`, `glob`, `grep`, `edit`, `write`, and `patch`, including calls made by subagents. It also covers shell working directories and paths that OpenCode's shell scanner can infer. Staged inputs and the copied skill stay inside the scope, so with-skill runs keep their files.
+- Shell is not a sandbox. The shell scanner's directory inference is best effort; a command that hides an external path from the scanner, such as interpreter code that opens a file by a computed name, can still read outside the scope. MCP tools, plugins, and webfetch are outside the guarantee. Managed or global `allow` policies can outrank a project deny.
+- Keep the scope outside the skill's repository. The default system temp directory does. A `temp_root` inside the repository makes the source an internal path and weakens the boundary.
+- `loaded_skill_ids` proves the skill tool did not load. It does not prove a baseline never saw the skill source, because of the shell limit.
 - A trigger probe cleans its scope before returning, so `run.output_files` paths from a probe no longer exist. Use the transcript when debugging a probe.
 - Repeated probe runs and trigger-rate reporting are handled by `scripts.trigger_eval`, not the adapter.

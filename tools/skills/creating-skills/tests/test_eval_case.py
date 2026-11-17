@@ -533,10 +533,23 @@ class OpenCodeRunCaseTests(unittest.TestCase):
 
         invocation = self.fake.invocation()
         self.assertEqual(invocation["skills"], ["example-skill"])
+        self.assertEqual(
+            invocation["policies"],
+            [
+                {
+                    "action": "tool.use",
+                    "resource": "external_directory:*",
+                    "effect": "deny",
+                }
+            ],
+        )
         attached = invocation["files"]
         self.assertEqual(len(attached), 1)
         path, content = next(iter(attached.items()))
         self.assertTrue(path.endswith("evals/files/input.txt"))
+        self.assertTrue(
+            Path(path).resolve().is_relative_to(Path(invocation["cwd"]).resolve())
+        )
         self.assertEqual(content, "Input.\n")
         self.assertEqual(list(self.root.glob("creating-skills-scope-*")), [])
 
@@ -550,6 +563,16 @@ class OpenCodeRunCaseTests(unittest.TestCase):
         self.assertEqual(
             invocation["permissions"],
             [{"action": "skill", "resource": "*", "effect": "deny"}],
+        )
+        self.assertEqual(
+            invocation["policies"],
+            [
+                {
+                    "action": "tool.use",
+                    "resource": "external_directory:*",
+                    "effect": "deny",
+                }
+            ],
         )
 
     def test_old_skill_denies_every_other_skill(self) -> None:
@@ -573,5 +596,15 @@ class OpenCodeRunCaseTests(unittest.TestCase):
             [
                 {"action": "skill", "resource": "*", "effect": "deny"},
                 {"action": "skill", "resource": "example-skill", "effect": "allow"},
+            ],
+        )
+        self.assertEqual(
+            invocation["policies"],
+            [
+                {
+                    "action": "tool.use",
+                    "resource": "external_directory:*",
+                    "effect": "deny",
+                }
             ],
         )

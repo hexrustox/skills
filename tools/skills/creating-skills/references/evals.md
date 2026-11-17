@@ -53,7 +53,7 @@ The stable identity is `eval-<ID>-<arm>`, for example `eval-1-with_skill`. It is
 - `without_skill` runs an empty scope for a new skill. It is the default when no baseline snapshot is supplied.
 - `old_skill` runs a baseline snapshot. Pass its directory with `--baseline-skill`.
 
-Both baseline forms deny every other skill. Take the `old_skill` snapshot before editing the skill:
+Both baseline forms deny every other skill. Every arm also hard-denies tool access outside its temporary project, including the live skill source, old snapshots, the workspace, and sibling scopes. Stage every needed input and ask the agent to write outputs inside the scope; paths outside are blocked. Take the `old_skill` snapshot before editing the skill:
 
 ```bash
 mkdir -p path/to/example-skill-workspace
@@ -64,7 +64,7 @@ The batch copies the snapshot once under the live skill's name, so both arms rep
 
 ## Input files
 
-Every path in `files` resolves against the skill root. The runner copies each file into `<eval>/inputs/<path relative to skill>` before the run, then stages the preserved copy into the isolated project at the same relative path. The adapter attaches those staged files to the prompt. Inputs are preserved once per eval directory: a later arm or rerun uses the preserved copy even if the source file changed. Start a new iteration when the inputs change.
+Every path in `files` resolves against the skill root. The runner copies each file into `<eval>/inputs/<path relative to skill>` before the run, then stages the preserved copy into the isolated project at the same relative path. The adapter attaches those staged files to the prompt. Because the staged copy is inside the scope, it remains readable under the external-directory denial. Inputs are preserved once per eval directory: a later arm or rerun uses the preserved copy even if the source file changed. Start a new iteration when the inputs change.
 
 ## Artifacts
 

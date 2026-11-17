@@ -277,6 +277,14 @@ def _scope_config(skill_ids: tuple[str, ...]) -> dict[str, object]:
     return {
         "$schema": "https://opencode.ai/config.json",
         "permissions": permissions,
+        # Hard-deny external paths; global permissions cannot override a policy.
+        "policies": [
+            {
+                "action": "tool.use",
+                "resource": "external_directory:*",
+                "effect": "deny",
+            }
+        ],
         "agents": {
             _NO_TOOLS_AGENT: {
                 "description": "Answer without using tools.",
