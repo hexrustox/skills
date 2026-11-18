@@ -1,0 +1,404 @@
+"""Generate a standalone HTML review page from canonical eval run artifacts."""
+
+import argparse
+import base64
+import json
+import mimetypes
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
+
+from scripts.html_embed import embed_json
+from scripts.workspace import (
+    ARMS,
+    eval_directories,
+    eval_id_from_directory,
+    iteration_number,
+    run_id,
+    skill_name_from_workspace,
+)
+
+_ROOT_METADATA_OUTPUTS = frozenset({"metrics.json", "user_notes.md"})
+_TEXT_EXTENSIONS = frozenset(
+    {
+        ".c",
+        ".cpp",
+        ".css",
+        ".csv",
+        ".go",
+        ".h",
+        ".hpp",
+        ".html",
+        ".java",
+        ".js",
+        ".json",
+        ".jsx",
+        ".md",
+        ".py",
+        ".rb",
+        ".r",
+        ".rs",
+        ".sh",
+        ".sql",
+        ".toml",
+        ".ts",
+        ".tsx",
+        ".txt",
+        ".xml",
+        ".yaml",
+        ".yml",
+    }
+)
+_IMAGE_EXTENSIONS = frozenset({".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"})
+_MIME_OVERRIDES = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".svg": "image/svg+xml",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+_TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "assets" / "review.html"
+
+
+def write_review(
+    iteration_dir: Path,
+    *,
+    output_path: Path | None = None,
+    previous_iteration: Path | None = None,
+    benchmark_path: Path | None = None,
+    include_previous: bool = True,
+    skill_name: str | None = None,
+) -> Path:
+    """Write the standalone review page for ``iteration_dir`` and return its path."""
+    iteration = Path(iteration_dir)
+    data = collect_review(
+        iteration,
+        previous_iteration=previous_iteration,
+        benchmark_path=benchmark_path,
+        include_previous=include_previous,
+        skill_name=skill_name,
+    )
+    template = _TEMPLATE_PATH.read_text(encoding="utf-8")
+    marker = "/*__EMBEDDED_DATA__*/"
+    if marker not in template:
+        raise ValueError(f"review template {str(_TEMPLATE_PATH)!r} has no data marker")
+    embedded = embed_json(data)
+    html = template.replace(marker, f"const EMBEDDED_DATA = {embedded};")
+    destination = (
+        Path(output_path)
+        if output_path is not None
+        else iteration.resolve() / "review.html"
+    )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(html, encoding="utf-8")
+    return destination
+
+
+def collect_review(
+    iteration_dir: Path,
+    *,
+    previous_iteration: Path | None = None,
+    benchmark_path: Path | None = None,
+    include_previous: bool = True,
+    skill_name: str | None = None,
+) -> dict[str, Any]:
+    """Build the review document embedded in the page."""
+    iteration = Path(iteration_dir).resolve()
+    if not iteration.is_dir():
+        raise ValueError(f"iteration directory {str(iteration)!r} does not exist")
+
+    runs = collect_runs(iteration)
+    if not runs:
+        raise ValueError(f"no runs found in {str(iteration)!r}")
+
+    if previous_iteration is not None:
+        previous_dir: Path | None = Path(previous_iteration).resolve()
+    elif include_previous:
+        previous_dir = find_previous_iteration(iteration)
+    else:
+        previous_dir = None
+    if previous_dir is not None and not previous_dir.is_dir():
+        raise ValueError(
+            f"previous iteration directory {str(previous_dir)!r} does not exist"
+        )
+
+    benchmark = _load_benchmark(iteration, benchmark_path)
+    name = skill_name or _skill_name(iteration, benchmark)
+    return {
+        "skill_name": name,
+        "iteration": iteration.name,
+        "runs": runs,
+        "feedback": load_feedback(iteration, skill_name=name),
+        "previous": (
+            _previous_document(previous_dir, skill_name=name) if previous_dir else None
+        ),
+        "benchmark": benchmark,
+    }
+
+
+def collect_runs(iteration_dir: Path) -> list[dict[str, Any]]:
+    """Return one review entry per arm directory in ``iteration_dir``."""
+    runs: list[dict[str, Any]] = []
+    for eval_dir in eval_directories(Path(iteration_dir)):
+        metadata = _load_json(eval_dir / "eval_metadata.json") or {}
+        for arm in ARMS:
+            arm_dir = eval_dir / arm
+            if arm_dir.is_dir():
+                runs.append(_build_run(eval_dir, arm, metadata))
+    return runs
+
+
+def find_previous_iteration(iteration_dir: Path) -> Path | None:
+    """Return the nearest earlier ``iteration-<N>`` beside ``iteration_dir``."""
+    iteration = Path(iteration_dir).resolve()
+    number = iteration_number(iteration)
+    if number is None:
+        return None
+    candidates: list[tuple[int, Path]] = []
+    for path in iteration.parent.iterdir():
+        if not path.is_dir():
+            continue
+        other = iteration_number(path)
+        if other is not None and other < number:
+            candidates.append((other, path))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda candidate: candidate[0])[1]
+
+
+def load_feedback(
+    iteration_dir: Path, *, skill_name: str | None = None
+) -> dict[str, Any]:
+    """Load reviewer feedback saved beside an iteration."""
+    iteration = Path(iteration_dir)
+    document = _load_json(iteration / "feedback.json")
+    if document is None:
+        return {"reviews": {}, "reviewed": [], "notes": ""}
+    recorded_iteration = document.get("iteration")
+    if (
+        isinstance(recorded_iteration, str)
+        and recorded_iteration
+        and recorded_iteration != iteration.name
+    ):
+        raise ValueError(
+            f"feedback file {str(iteration / 'feedback.json')!r} is for "
+            f"{recorded_iteration!r}, not {iteration.name!r}"
+        )
+    recorded_skill = document.get("skill_name")
+    if (
+        skill_name
+        and isinstance(recorded_skill, str)
+        and recorded_skill
+        and recorded_skill != skill_name
+    ):
+        raise ValueError(
+            f"feedback file {str(iteration / 'feedback.json')!r} is for "
+            f"skill {recorded_skill!r}, not {skill_name!r}"
+        )
+    reviews: dict[str, str] = {}
+    reviewed: list[str] = []
+    raw_reviews = document.get("reviews")
+    if isinstance(raw_reviews, list):
+        for entry in raw_reviews:
+            if not isinstance(entry, dict):
+                continue
+            run_identity = entry.get("run_id")
+            feedback = entry.get("feedback")
+            if isinstance(run_identity, str) and isinstance(feedback, str):
+                reviews[run_identity] = feedback
+                if (
+                    entry.get("reviewed") is True or feedback.strip()
+                ) and run_identity not in reviewed:
+                    reviewed.append(run_identity)
+    return {
+        "reviews": reviews,
+        "reviewed": reviewed,
+        "notes": _text(document.get("notes")),
+    }
+
+
+def _build_run(
+    eval_dir: Path,
+    arm: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    arm_dir = eval_dir / arm
+    directory_eval_id = eval_id_from_directory(eval_dir)
+    run_document = _load_json(arm_dir / "run.json") or {}
+    error_document = _load_json(arm_dir / "error.json")
+    return {
+        "run_id": run_id(directory_eval_id, arm),
+        "eval_id": metadata.get("eval_id", directory_eval_id),
+        "eval_name": _text(metadata.get("eval_name")) or f"eval-{directory_eval_id}",
+        "arm": arm,
+        "prompt": _text(metadata.get("prompt")),
+        "expected_output": _text(metadata.get("expected_output")),
+        "status": _status(run_document, error_document),
+        "error": _error_message(error_document),
+        "assistant_text": _text(run_document.get("assistant_text")),
+        "outputs": _embed_outputs(arm_dir / "outputs"),
+        "grading": _load_json(arm_dir / "grading.json"),
+    }
+
+
+def _status(run_document: dict[str, Any], error_document: dict[str, Any] | None) -> str:
+    if error_document is not None:
+        return "error"
+    if not run_document:
+        return "unknown"
+    if bool(run_document.get("timed_out")):
+        return "timed_out"
+    exit_code = run_document.get("exit_code")
+    if (
+        isinstance(exit_code, int)
+        and not isinstance(exit_code, bool)
+        and exit_code != 0
+    ):
+        return "failed"
+    return "ok"
+
+
+def _error_message(error_document: dict[str, Any] | None) -> str:
+    if error_document is None:
+        return ""
+    detail = error_document.get("error")
+    if isinstance(detail, dict):
+        return _text(detail.get("message")) or _text(detail.get("type"))
+    return _text(detail)
+
+
+def _previous_document(previous_dir: Path, *, skill_name: str) -> dict[str, Any]:
+    runs = collect_runs(previous_dir)
+    feedback = load_feedback(previous_dir, skill_name=skill_name)
+    return {
+        "iteration": previous_dir.name,
+        "runs": {
+            run["run_id"]: {
+                "outputs": run["outputs"],
+            }
+            for run in runs
+        },
+        "feedback": feedback["reviews"],
+        "notes": feedback["notes"],
+    }
+
+
+def _load_benchmark(
+    iteration_dir: Path, benchmark_path: Path | None
+) -> dict[str, Any] | None:
+    path = (
+        Path(benchmark_path)
+        if benchmark_path is not None
+        else Path(iteration_dir) / "benchmark.json"
+    )
+    if not path.is_file():
+        if benchmark_path is not None:
+            raise ValueError(f"benchmark file {str(path)!r} does not exist")
+        return None
+    return _load_json(path)
+
+
+def _skill_name(iteration_dir: Path, benchmark: dict[str, Any] | None) -> str:
+    if benchmark is not None:
+        metadata = benchmark.get("metadata")
+        if isinstance(metadata, dict):
+            name = _text(metadata.get("skill_name"))
+            if name:
+                return name
+    return skill_name_from_workspace(iteration_dir.parent) or "skill"
+
+
+def _embed_outputs(outputs_dir: Path) -> list[dict[str, Any]]:
+    if not outputs_dir.is_dir():
+        return []
+    files: list[tuple[Path, str]] = []
+    for path in outputs_dir.rglob("*"):
+        if not path.is_file() or path.is_symlink():
+            continue
+        relative = path.relative_to(outputs_dir)
+        if relative.parent == Path(".") and relative.name in _ROOT_METADATA_OUTPUTS:
+            continue
+        files.append((path, relative.as_posix()))
+    files.sort(key=lambda item: item[1])
+    return [_embed_file(path, name) for path, name in files]
+
+
+def _embed_file(path: Path, name: str) -> dict[str, Any]:
+    suffix = path.suffix.lower()
+    mime = _mime_type(path)
+    if suffix in _TEXT_EXTENSIONS:
+        return {
+            "name": name,
+            "type": "text",
+            "content": path.read_text(encoding="utf-8", errors="replace"),
+        }
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    data_uri = f"data:{mime};base64,{encoded}"
+    if suffix in _IMAGE_EXTENSIONS:
+        return {
+            "name": name,
+            "type": "image",
+            "mime": mime,
+            "data_uri": data_uri,
+        }
+    if suffix == ".pdf":
+        return {"name": name, "type": "pdf", "mime": mime, "data_uri": data_uri}
+    return {"name": name, "type": "binary", "mime": mime, "data_uri": data_uri}
+
+
+def _mime_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in _MIME_OVERRIDES:
+        return _MIME_OVERRIDES[suffix]
+    mime, _encoding = mimetypes.guess_type(str(path))
+    return mime or "application/octet-stream"
+
+
+def _load_json(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{str(path)!r} is not valid JSON: {error}") from error
+    if not isinstance(document, dict):
+        raise TypeError(f"{str(path)!r} must contain a JSON object")
+    return document
+
+
+def _text(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Generate a review page from the command line."""
+    parser = argparse.ArgumentParser(
+        description="Write a standalone HTML review page for one eval iteration."
+    )
+    parser.add_argument("--iteration", required=True, type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--previous", type=Path)
+    parser.add_argument("--benchmark", type=Path)
+    parser.add_argument("--no-previous", action="store_true")
+    parser.add_argument("--skill-name")
+    args = parser.parse_args(argv)
+
+    try:
+        path = write_review(
+            args.iteration,
+            output_path=args.output,
+            previous_iteration=args.previous,
+            benchmark_path=args.benchmark,
+            include_previous=not args.no_previous,
+            skill_name=args.skill_name,
+        )
+    except (OSError, TypeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+    print(f"review: {path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

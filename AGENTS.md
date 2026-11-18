@@ -1,12 +1,16 @@
-## Writing skills
+## Skill authoring
 
-Create new skills under `skills/`. `.agents/skills/` holds vendored third-party skills tracked in `skills-lock.json`.
-When creating or editing a skill, read `docs/agents/skill-spec.md` and `docs/agents/skill-best-practices.md`, then load the `writing-for-agents` skill and follow its guidelines.
-Name skills in the gerund form (`processing-pdfs`, `writing-documentation`), keeping one pattern across the collection.
+Load the `creating-skills` skill before creating or editing a skill.
 
-## Verification
+- User-facing skills live under `skills/<name>/`.
+- Development-tooling skills live under `tools/skills/<name>/`.
+- Vendored third-party skills live under `.agents/skills/` and are pinned in `skills-lock.json`; do not edit them.
 
-After editing a skill, run validate-skill <path to SKILL.md>.
+OpenCode exposes `tools/skills` as a project skill source and hides the vendored `skill-creator` from model invocation; launch sessions at the repository root so the source resolves.
+
+### Maintaining the `creating-skills` port
+
+Read `docs/agents/creating-skills-maintenance.md` before syncing upstream or updating the port's provenance, pinned commit, or lock hash.
 
 ## Agent skills
 

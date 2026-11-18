@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eval Review</title>
+<style>
+  :root {
+    --bg: #f6f5f0;
+    --surface: #ffffff;
+    --border: #dedbd1;
+    --text: #1b1a17;
+    --muted: #6f6b60;
+    --accent: #b4492d;
+    --accent-dark: #8f3722;
+    --good: #4b6b2f;
+    --good-bg: #edf3e6;
+    --bad: #a12f2f;
+    --bad-bg: #f9e9e7;
+    --warn: #8a5a12;
+    --warn-bg: #fbf0d9;
+    --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    background: #1b1a17;
+    color: #f6f5f0;
+    flex-shrink: 0;
+  }
+  .topbar h1 { margin: 0; font-size: 1.15rem; font-weight: 650; }
+  .topbar h1 span { color: #e8b9a9; }
+  .topbar .subtitle { margin-top: 0.25rem; font-size: 0.8rem; color: #b9b4a8; }
+  .topbar-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+  button {
+    font: inherit;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 0.5rem 0.9rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+  .topbar button { background: #2c2a26; border-color: #454139; color: #f6f5f0; }
+  .topbar button.primary { background: #d06a4d; border-color: #d06a4d; color: #fff; }
+  .topbar button:hover { border-color: #8f887a; }
+  .status-note { color: #b9b4a8; font-size: 0.78rem; min-height: 1em; }
+  .tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .tab {
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 0.7rem 1.1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .tab:hover { color: var(--text); border-color: var(--border); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel { display: none; flex: 1; min-height: 0; }
+  .panel.active { display: flex; }
+  #panel-outputs { flex-direction: row; }
+  #panel-benchmark { overflow-y: auto; padding: 1.5rem; }
+  .sidebar {
+    width: 300px;
+    min-width: 240px;
+    border-right: 1px solid var(--border);
+    background: #efede6;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .sidebar-header {
+    padding: 0.8rem 1rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  #review-progress { font-weight: 500; text-transform: none; letter-spacing: 0; }
+  #run-list { overflow-y: auto; padding: 0 0.6rem 0.6rem; flex: 1; }
+  .run-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin: 0.25rem 0;
+    padding: 0.65rem 0.7rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+  }
+  .run-item:hover { background: #f7f5ef; border-color: var(--border); }
+  .run-item.selected { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .run-item .run-name { display: block; font-weight: 650; font-size: 0.86rem; }
+  .run-item.reviewed .run-name::after {
+    content: " \2713";
+    color: var(--good);
+    font-size: 0.72rem;
+  }
+  .run-item .run-id { display: block; margin-top: 0.15rem; color: var(--muted); font-family: var(--mono); font-size: 0.7rem; word-break: break-word; }
+  .run-item .run-badges { display: flex; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.4rem; }
+  .badge {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.65rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background: #eae6dc;
+    color: #5b564c;
+  }
+  .badge.with_skill { background: #e3edf5; color: #245b85; }
+  .badge.without_skill, .badge.old_skill { background: var(--warn-bg); color: var(--warn); }
+  .badge.good { background: var(--good-bg); color: var(--good); }
+  .badge.bad { background: var(--bad-bg); color: var(--bad); }
+  .badge.error, .badge.failed, .badge.timed_out { background: var(--bad-bg); color: var(--bad); }
+  .run-item .has-feedback-dot {
+    display: none;
+    float: right;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-top: 0.3rem;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .run-item.has-feedback .has-feedback-dot { display: block; }
+  .sidebar-notes { border-top: 1px solid var(--border); padding: 0.8rem; flex-shrink: 0; }
+  .sidebar-notes label { display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.35rem; }
+  textarea { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.7rem; font: inherit; font-size: 0.9rem; line-height: 1.5; color: var(--text); background: var(--surface); resize: vertical; }
+  textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(180, 73, 45, 0.14); }
+  #overall-notes { min-height: 5rem; }
+  #run-detail { flex: 1; overflow-y: auto; padding: 1.5rem 2rem 3rem; }
+  .empty-state { color: var(--muted); font-style: italic; padding: 2rem 0; }
+  .detail-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
+  .detail-head h2 { margin: 0; font-size: 1.3rem; }
+  .detail-head .run-id { margin-top: 0.25rem; color: var(--muted); font-family: var(--mono); font-size: 0.75rem; word-break: break-word; }
+  .status-banner { border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.85rem; margin-bottom: 1rem; background: var(--warn-bg); color: var(--warn); white-space: pre-wrap; }
+  .status-banner.error, .status-banner.failed, .status-banner.timed_out { background: var(--bad-bg); color: var(--bad); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 1rem; overflow: hidden; }
+  .card-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.65rem 0.9rem; background: #f0eee7; border-bottom: 1px solid var(--border); }
+  .card-header h3 { margin: 0; font-size: 0.76rem; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .card-body { padding: 0.9rem; }
+  .prompt-text { font-family: var(--serif); font-size: 1rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  .expected { margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px dashed var(--border); font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+  .expected strong { color: var(--text); }
+  pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 0.8rem; line-height: 1.5; }
+  .file + .file { margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
+  .file-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.45rem; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+  .file-header a { color: var(--accent); text-decoration: none; font-family: var(--sans); font-size: 0.72rem; }
+  .file-header a:hover { text-decoration: underline; }
+  .file img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 4px; }
+  .file iframe { width: 100%; height: 32rem; border: 1px solid var(--border); border-radius: 4px; }
+  .download-link { display: inline-block; padding: 0.4rem 0.7rem; border: 1px solid var(--border); border-radius: 4px; color: var(--accent); text-decoration: none; font-size: 0.8rem; }
+  .download-link:hover { background: #f4f1ea; }
+  .grades-summary { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.8rem; font-size: 0.88rem; }
+  .grade-rate { font-weight: 750; border-radius: 999px; padding: 0.15rem 0.55rem; font-size: 0.78rem; }
+  .grade-rate.good { background: var(--good-bg); color: var(--good); }
+  .grade-rate.bad { background: var(--bad-bg); color: var(--bad); }
+  .grade-rate.mixed { background: var(--warn-bg); color: var(--warn); }
+  .expectation { padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; line-height: 1.45; }
+  .expectation:last-child { border-bottom: none; }
+  .expectation .marker { font-weight: 750; margin-right: 0.4rem; }
+  .expectation .marker.pass { color: var(--good); }
+  .expectation .marker.fail { color: var(--bad); }
+  .expectation .evidence { margin-top: 0.25rem; padding-left: 1.2rem; color: var(--muted); font-size: 0.78rem; white-space: pre-wrap; word-break: break-word; }
+  .previous-feedback { margin: 0.8rem 0 0; padding: 0.7rem 0.9rem; border-left: 3px solid var(--accent); background: #f7f3ec; font-family: var(--serif); font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .previous-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 1rem 0 0.35rem; }
+  .notes { font-size: 0.85rem; color: var(--muted); line-height: 1.5; white-space: pre-wrap; }
+  details summary { cursor: pointer; color: var(--accent); font-size: 0.82rem; font-weight: 600; }
+  details[open] summary { margin-bottom: 0.7rem; }
+  .feedback-textarea { min-height: 7rem; }
+  .muted { color: var(--muted); }
+  .benchmark-header { margin-bottom: 1.2rem; }
+  .benchmark-header h2 { margin: 0 0 0.3rem; font-size: 1.3rem; }
+  .benchmark-header p { margin: 0; color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+  .benchmark-section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.2rem; }
+  .benchmark-section h3 { margin: 0 0 0.7rem; font-size: 0.85rem; }
+  table.benchmark { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+  table.benchmark th, table.benchmark td { border: 1px solid var(--border); padding: 0.45rem 0.55rem; text-align: left; vertical-align: top; }
+  table.benchmark th { background: #efede6; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  table.benchmark tr:nth-child(even) td { background: #faf9f5; }
+  .delta-positive { color: var(--good); font-weight: 700; }
+  .delta-negative { color: var(--bad); font-weight: 700; }
+  .benchmark-notes { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; line-height: 1.6; }
+  .toast {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(1rem);
+    background: #1b1a17;
+    color: #f6f5f0;
+    padding: 0.55rem 1rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 20;
+  }
+  .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (max-width: 820px) {
+    #panel-outputs { flex-direction: column; overflow-y: auto; }
+    .sidebar { width: 100%; min-width: 0; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--border); }
+    #run-detail { overflow: visible; padding: 1rem; }
+    .topbar { align-items: flex-start; flex-direction: column; }
+    .topbar-actions { justify-content: flex-start; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <h1>Eval Review: <span id="skill-name"></span></h1>
+    <div class="subtitle">Review each output, write feedback, then copy or download the JSON and return it to the agent. No server needed.</div>
+    <div class="subtitle" id="iteration-label"></div>
+  </div>
+  <div class="topbar-actions">
+    <span class="status-note" id="feedback-status" role="status"></span>
+    <button type="button" id="copy-feedback">Copy feedback JSON</button>
+    <button type="button" class="primary" id="download-feedback">Download feedback JSON</button>
+  </div>
+</header>
+<nav class="tabs" role="tablist" aria-label="Review views">
+  <button type="button" class="tab active" id="outputs-tab" data-view="outputs" role="tab" aria-selected="true">Outputs</button>
+  <button type="button" class="tab" id="benchmark-tab" data-view="benchmark" role="tab" aria-selected="false">Benchmark</button>
+</nav>
+<section class="panel active" id="panel-outputs" role="tabpanel" aria-labelledby="outputs-tab">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span>Runs</span>
+      <span id="review-progress"></span>
+    </div>
+    <div id="run-list"></div>
+    <div class="sidebar-notes">
+      <label for="overall-notes">Overall notes</label>
+      <textarea id="overall-notes" placeholder="Cross-run observations, priorities, or anything the per-run feedback does not cover."></textarea>
+    </div>
+  </aside>
+  <main id="run-detail">
+    <div class="empty-state">Select a run to review its output.</div>
+  </main>
+</section>
+<section class="panel" id="panel-benchmark" role="tabpanel" aria-labelledby="benchmark-tab">
+  <div id="benchmark-content"></div>
+</section>
+<div class="toast" id="toast" role="status"></div>
+<script>
+/*__EMBEDDED_DATA__*/
+
+const RUNS = EMBEDDED_DATA.runs || [];
+const FEEDBACK = EMBEDDED_DATA.feedback || { reviews: {}, reviewed: [], notes: "" };
+const PREVIOUS = EMBEDDED_DATA.previous;
+const feedbackMap = Object.assign({}, FEEDBACK.reviews || {});
+const visited = new Set(FEEDBACK.reviewed || []);
+for (const [runId, text] of Object.entries(FEEDBACK.reviews || {})) {
+  if (String(text).trim()) visited.add(runId);
+}
+let currentRunId = RUNS.length ? RUNS[0].run_id : null;
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function armLabel(arm) {
+  return String(arm || "").replace(/_/g, " ");
+}
+
+function statusLabel(status) {
+  return status === "timed_out" ? "timed out" : status;
+}
+
+function rateBand(rate) {
+  const number = Number(rate);
+  if (!Number.isFinite(number)) return "mixed";
+  if (number >= 0.8) return "good";
+  if (number < 0.5) return "bad";
+  return "mixed";
+}
+
+const BAND_BADGE = { good: "good", bad: "bad", mixed: "" };
+const BAND_DELTA = { good: "delta-positive", bad: "delta-negative", mixed: "" };
+
+function setStatus(message) {
+  document.getElementById("feedback-status").textContent = message;
+}
+
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("visible");
+  window.setTimeout(() => toast.classList.remove("visible"), 1800);
+}
+
+function gradeBadge(run) {
+  if (!run.grading || !run.grading.summary) return "";
+  const summary = run.grading.summary;
+  const total = Number(summary.total) || 0;
+  if (!total) return "";
+  const rate = Number(summary.pass_rate);
+  const display = Number.isFinite(rate) ? Math.round(rate * 100) + "%" : "graded";
+  const className = BAND_BADGE[rateBand(rate)];
+  return '<span class="badge ' + className + '">' + escapeHtml(display) + "</span>";
+}
+
+function statusBadge(run) {
+  if (run.status === "ok") return "";
+  return '<span class="badge ' + escapeHtml(run.status) + '">' + escapeHtml(statusLabel(run.status)) + "</span>";
+}
+
+function renderRunList() {
+  const list = document.getElementById("run-list");
+  list.innerHTML = "";
+  for (const run of RUNS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "run-item" +
+      (run.run_id === currentRunId ? " selected" : "") +
+      (visited.has(run.run_id) ? " reviewed" : "") +
+      (feedbackMap[run.run_id] ? " has-feedback" : "");
+    button.dataset.runId = run.run_id;
+    button.addEventListener("click", () => selectRun(run.run_id));
+    button.innerHTML =
+      '<span class="has-feedback-dot"></span>' +
+      '<span class="run-name">' + escapeHtml(run.eval_name || ("Eval " + run.eval_id)) + "</span>" +
+      '<span class="run-id">' + escapeHtml(run.run_id) + "</span>" +
+      '<span class="run-badges">' +
+        '<span class="badge ' + escapeHtml(run.arm) + '">' + escapeHtml(armLabel(run.arm)) + "</span>" +
+        gradeBadge(run) +
+        statusBadge(run) +
+      "</span>";
+    list.appendChild(button);
+  }
+  updateReviewProgress();
+}
+
+function updateReviewProgress() {
+  const reviewed = RUNS.filter((run) => visited.has(run.run_id)).length;
+  document.getElementById("review-progress").textContent = reviewed + " of " + RUNS.length + " reviewed";
+}
+
+function updateFeedbackDots() {
+  for (const button of document.querySelectorAll(".run-item")) {
+    button.classList.toggle("has-feedback", Boolean((feedbackMap[button.dataset.runId] || "").trim()));
+    button.classList.toggle("reviewed", visited.has(button.dataset.runId));
+  }
+  updateReviewProgress();
+}
+
+function selectRun(runId, markReviewed = true) {
+  currentRunId = runId;
+  if (markReviewed) visited.add(runId);
+  renderRunList();
+  renderDetail();
+  document.getElementById("run-detail").scrollTop = 0;
+}
+
+function renderDetail() {
+  const container = document.getElementById("run-detail");
+  const run = RUNS.find((candidate) => candidate.run_id === currentRunId);
+  if (!run) {
+    container.innerHTML = '<div class="empty-state">Select a run to review its output.</div>';
+    return;
+  }
+
+  const previousRun = PREVIOUS && PREVIOUS.runs ? PREVIOUS.runs[run.run_id] : null;
+  const previousFeedback = PREVIOUS && PREVIOUS.feedback ? PREVIOUS.feedback[run.run_id] : "";
+  const previousNotes = PREVIOUS && PREVIOUS.notes ? PREVIOUS.notes : "";
+  const hasPrevious = previousRun || previousFeedback || previousNotes;
+
+  let html = '<div class="detail-head"><div><h2>' + escapeHtml(run.eval_name || ("Eval " + run.eval_id)) + "</h2>" +
+    '<div class="run-id">' + escapeHtml(run.run_id) + "</div></div>" +
+    '<div><span class="badge ' + escapeHtml(run.arm) + '">' + escapeHtml(armLabel(run.arm)) + "</span></div></div>";
+
+  if (run.status !== "ok" || run.error) {
+    const message = run.error || (run.status === "failed" ? "The run exited with a non-zero status." : "The run did not finish cleanly.");
+    html += '<div class="status-banner ' + escapeHtml(run.status) + '">' + escapeHtml(message) + "</div>";
+  }
+
+  html += '<section class="card"><div class="card-header"><h3>Prompt</h3></div><div class="card-body">' +
+    '<div class="prompt-text">' + escapeHtml(run.prompt || "(No prompt found)") + "</div>";
+  if (run.expected_output) {
+    html += '<div class="expected"><strong>Expected:</strong> ' + escapeHtml(run.expected_output) + "</div>";
+  }
+  html += "</div></section>";
+
+  if (run.assistant_text) {
+    html += '<section class="card"><div class="card-header"><h3>Assistant response</h3></div><div class="card-body"><pre>' + escapeHtml(run.assistant_text) + "</pre></div></section>";
+  }
+
+  html += '<section class="card"><div class="card-header"><h3>Output files</h3></div><div class="card-body">' +
+    renderFiles(run.outputs || []) + "</div></section>";
+
+  if (run.grading) {
+    html += '<section class="card"><div class="card-header"><h3>Formal grades</h3></div><div class="card-body">' +
+      renderGrades(run.grading) + "</div></section>";
+  }
+
+  if (hasPrevious) {
+    html += '<section class="card"><div class="card-header"><h3>Previous iteration' +
+      (PREVIOUS && PREVIOUS.iteration ? " (" + escapeHtml(PREVIOUS.iteration) + ")" : "") +
+      '</h3></div><div class="card-body">';
+    if (previousRun) {
+      html += renderFiles(previousRun.outputs || []);
+    } else {
+      html += '<p class="muted">No output from the previous iteration for this run.</p>';
+    }
+    if (previousFeedback) {
+      html += '<div class="previous-label">Previous feedback</div><blockquote class="previous-feedback">' + escapeHtml(previousFeedback) + "</blockquote>";
+    }
+    if (previousNotes) {
+      html += '<div class="previous-label">Previous overall notes</div><div class="notes">' + escapeHtml(previousNotes) + "</div>";
+    }
+    html += "</div></section>";
+  }
+
+  html += '<section class="card"><div class="card-header"><h3>Your feedback</h3></div><div class="card-body">' +
+    '<textarea class="feedback-textarea" id="feedback" placeholder="What works, what does not, and what should change? Empty means no change requested."></textarea>' +
+    "</div></section>";
+
+  container.innerHTML = html;
+  const textarea = document.getElementById("feedback");
+  textarea.value = feedbackMap[run.run_id] || "";
+  textarea.addEventListener("input", () => {
+    feedbackMap[run.run_id] = textarea.value;
+    visited.add(run.run_id);
+    updateFeedbackDots();
+    setStatus("Unsaved feedback");
+  });
+}
+
+function renderFiles(files) {
+  if (!files.length) {
+    return '<p class="empty-state">No output files.</p>';
+  }
+  return files.map((file) => {
+    const name = escapeHtml(file.name);
+    const download = '<a href="' + escapeHtml(downloadUri(file)) + '" download="' + name + '">Download</a>';
+    let body = "";
+    if (file.type === "text") {
+      body = "<pre>" + escapeHtml(file.content) + "</pre>";
+    } else if (file.type === "image") {
+      body = '<img src="' + escapeHtml(file.data_uri) + '" alt="' + name + '">';
+    } else if (file.type === "pdf") {
+      body = '<iframe src="' + escapeHtml(file.data_uri) + '" title="' + name + '"></iframe>';
+    } else {
+      body = '<a class="download-link" href="' + escapeHtml(file.data_uri) + '" download="' + name + '">Download ' + name + "</a>";
+    }
+    return '<div class="file"><div class="file-header"><span>' + name + "</span>" + download + "</div>" + body + "</div>";
+  }).join("");
+}
+
+function downloadUri(file) {
+  if (file.data_uri) return file.data_uri;
+  if (file.type === "text") {
+    return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+  }
+  return "#";
+}
+
+function renderGrades(grading) {
+  const summary = grading.summary || {};
+  const passed = Number(summary.passed) || 0;
+  const failed = Number(summary.failed) || 0;
+  const total = Number(summary.total) || 0;
+  const rate = Number(summary.pass_rate);
+  const rateClass = rateBand(rate);
+  const rateText = Number.isFinite(rate) ? Math.round(rate * 100) + "%" : "Not scored";
+  let html = '<div class="grades-summary"><span class="grade-rate ' + rateClass + '">' + escapeHtml(rateText) + "</span>" +
+    "<span>" + passed + " passed, " + failed + " failed of " + total + "</span></div>";
+  for (const expectation of grading.expectations || []) {
+    const passedExpectation = Boolean(expectation.passed);
+    html += '<div class="expectation"><span class="marker ' + (passedExpectation ? "pass" : "fail") + '">' +
+      (passedExpectation ? "\u2713" : "\u2717") + "</span>" + escapeHtml(expectation.text || "");
+    if (expectation.evidence) {
+      html += '<div class="evidence">' + escapeHtml(expectation.evidence) + "</div>";
+    }
+    html += "</div>";
+  }
+  return html;
+}
+
+function feedbackDocument() {
+  const notes = document.getElementById("overall-notes");
+  return {
+    skill_name: EMBEDDED_DATA.skill_name,
+    iteration: EMBEDDED_DATA.iteration,
+    reviews: RUNS.filter((run) => visited.has(run.run_id)).map((run) => ({
+      run_id: run.run_id,
+      feedback: (feedbackMap[run.run_id] || "").trim(),
+      reviewed: true,
+    })),
+    notes: notes ? notes.value.trim() : "",
+  };
+}
+
+function feedbackJson() {
+  return JSON.stringify(feedbackDocument(), null, 2) + "\n";
+}
+
+function downloadFeedback() {
+  const blob = new Blob([feedbackJson()], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "feedback.json";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setStatus("Downloaded feedback.json");
+  showToast("Feedback downloaded");
+}
+
+function copyFeedback() {
+  const text = feedbackJson();
+  const fallback = () => {
+    const helper = document.createElement("textarea");
+    helper.value = text;
+    helper.setAttribute("readonly", "");
+    helper.style.position = "fixed";
+    helper.style.opacity = "0";
+    document.body.appendChild(helper);
+    helper.select();
+    try {
+      if (!document.execCommand("copy")) throw new Error("copy failed");
+      setStatus("Copied feedback JSON");
+      showToast("Feedback copied");
+    } catch (error) {
+      setStatus("Copy failed; download the JSON instead");
+    }
+    helper.remove();
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => {
+      setStatus("Copied feedback JSON");
+      showToast("Feedback copied");
+    }).catch(fallback);
+  } else {
+    fallback();
+  }
+}
+
+function switchView(view) {
+  for (const tab of document.querySelectorAll(".tab")) {
+    const active = tab.dataset.view === view;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+  }
+  for (const panel of document.querySelectorAll(".panel")) {
+    panel.classList.toggle("active", panel.id === "panel-" + view);
+  }
+}
+
+function formatNumber(value, digits) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(digits) : "\u2014";
+}
+
+function formatStat(stat, percent) {
+  if (!stat) return "\u2014";
+  const suffix = percent ? "%" : "";
+  const scale = percent ? 100 : 1;
+  const meanValue = Number(stat.mean);
+  const deviationValue = Number(stat.stddev);
+  const mean = Number.isFinite(meanValue)
+    ? (meanValue * scale).toFixed(percent ? 0 : 1) + suffix
+    : "\u2014";
+  const deviation = Number.isFinite(deviationValue)
+    ? (deviationValue * scale).toFixed(percent ? 0 : 1) + suffix
+    : "\u2014";
+  return mean + " \u00b1 " + deviation;
+}
+
+function deltaClass(value, lowerIsBetter) {
+  const number = Number.parseFloat(value);
+  if (!Number.isFinite(number) || number === 0) return "";
+  const better = lowerIsBetter ? number < 0 : number > 0;
+  return better ? "delta-positive" : "delta-negative";
+}
+
+function renderBenchmark() {
+  const data = EMBEDDED_DATA.benchmark;
+  const container = document.getElementById("benchmark-content");
+  if (!data) {
+    container.innerHTML = '<div class="empty-state">No benchmark data for this iteration. Aggregate the benchmark, or pass --benchmark to supply a file.</div>';
+    return;
+  }
+
+  const metadata = data.metadata || {};
+  const summary = data.run_summary || {};
+  const configs = Object.keys(summary).filter((key) => key !== "delta");
+  const delta = summary.delta || {};
+
+  let html = '<div class="benchmark-header"><h2>Benchmark Results</h2><p>';
+  if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong>";
+  if (metadata.timestamp) html += (metadata.skill_name ? " \u00b7 " : "") + escapeHtml(metadata.timestamp);
+  if (Array.isArray(metadata.evals_run)) html += " \u00b7 Evals: " + escapeHtml(metadata.evals_run.join(", "));
+  if (metadata.runs_per_configuration != null) html += " \u00b7 " + escapeHtml(metadata.runs_per_configuration) + " runs per configuration";
+  html += "</p></div>";
+
+  if (configs.length) {
+    html += '<section class="benchmark-section"><h3>Summary</h3><table class="benchmark"><thead><tr><th>Metric</th>';
+    for (const config of configs) html += "<th>" + escapeHtml(armLabel(config)) + "</th>";
+    html += "<th>Delta</th></tr></thead><tbody>";
+    html += '<tr><td><strong>Pass rate</strong></td>';
+    for (const config of configs) html += "<td>" + formatStat((summary[config] || {}).pass_rate, true) + "</td>";
+    html += '<td class="' + deltaClass(delta.pass_rate, false) + '">' + escapeHtml(delta.pass_rate || "\u2014") + "</td></tr>";
+    html += '<tr><td><strong>Time (s)</strong></td>';
+    for (const config of configs) html += "<td>" + formatStat((summary[config] || {}).time_seconds, false) + "</td>";
+    html += '<td class="' + deltaClass(delta.time_seconds, true) + '">' + escapeHtml(delta.time_seconds || "\u2014") + "</td></tr>";
+    html += '<tr><td><strong>Tokens</strong></td>';
+    for (const config of configs) html += "<td>" + formatStat((summary[config] || {}).tokens, false) + "</td>";
+    html += '<td class="' + deltaClass(delta.tokens, true) + '">' + escapeHtml(delta.tokens || "\u2014") + "</td></tr>";
+    html += "</tbody></table></section>";
+  }
+
+  const runs = data.runs || [];
+  if (runs.length) {
+    html += '<section class="benchmark-section"><h3>Per-run results</h3><table class="benchmark"><thead><tr>' +
+      "<th>Eval</th><th>Configuration</th><th>Run</th><th>Pass rate</th><th>Time (s)</th><th>Tokens</th><th>Errors</th>" +
+      "</tr></thead><tbody>";
+    for (const run of runs) {
+      const result = run.result || {};
+      const rate = Number(result.pass_rate);
+      const rateClass = BAND_DELTA[rateBand(rate)];
+      const rateText = Number.isFinite(rate) ? Math.round(rate * 100) + "%" : "\u2014";
+      html += "<tr><td>" + escapeHtml(run.eval_name || ("Eval " + run.eval_id)) + "</td>" +
+        "<td>" + escapeHtml(armLabel(run.configuration)) + "</td>" +
+        "<td>" + escapeHtml(run.run_number) + "</td>" +
+        '<td class="' + rateClass + '">' + rateText + " (" + escapeHtml(result.passed || 0) + "/" + escapeHtml(result.total || 0) + ")</td>" +
+        "<td>" + formatNumber(result.time_seconds, 1) + "</td>" +
+        "<td>" + formatNumber(result.tokens, 0) + "</td>" +
+        "<td>" + escapeHtml(result.errors || 0) + "</td></tr>";
+    }
+    html += "</tbody></table></section>";
+  }
+
+  const notes = data.notes || [];
+  if (notes.length) {
+    html += '<section class="benchmark-section"><h3>Analysis notes</h3><ul class="benchmark-notes">';
+    for (const note of notes) html += "<li>" + escapeHtml(note) + "</li>";
+    html += "</ul></section>";
+  }
+
+  container.innerHTML = html;
+}
+
+function init() {
+  document.title = "Eval Review: " + EMBEDDED_DATA.skill_name;
+  document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+  const previousLabel = PREVIOUS && PREVIOUS.iteration ? " \u00b7 previous: " + PREVIOUS.iteration : "";
+  document.getElementById("iteration-label").textContent = "Iteration: " + EMBEDDED_DATA.iteration + previousLabel +
+    " \u00b7 Save feedback as " + EMBEDDED_DATA.iteration + "/feedback.json";
+
+  for (const tab of document.querySelectorAll(".tab")) {
+    tab.addEventListener("click", () => switchView(tab.dataset.view));
+  }
+  document.getElementById("download-feedback").addEventListener("click", downloadFeedback);
+  document.getElementById("copy-feedback").addEventListener("click", copyFeedback);
+
+  const notes = document.getElementById("overall-notes");
+  notes.value = FEEDBACK.notes || "";
+  notes.addEventListener("input", () => setStatus("Unsaved feedback"));
+
+  renderRunList();
+  if (RUNS.length) {
+    selectRun(RUNS[0].run_id, false);
+  }
+  renderBenchmark();
+}
+
+init();
+</script>
+</body>
+</html>

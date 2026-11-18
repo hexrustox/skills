@@ -12,5 +12,5 @@ dev = [
 [tool.uv]
 package = false
 
-[tool.uv.workspace]
-members = ["*"]
+[tool.ty.environment]
+extra-paths = ["skills/creating-skills"]
