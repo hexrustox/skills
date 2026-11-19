@@ -2,6 +2,7 @@
 
 - User-facing skills live under `skills/<name>/`.
 - Vendored third-party skills live under `.agents/skills/` and are pinned in `skills-lock.json`; do not edit them.
+- Before creating, editing, or reviewing a skill, read `docs/agents/skill-authoring/README.md`.
 
 ## Agent skills
 
