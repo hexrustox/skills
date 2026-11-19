@@ -1,16 +1,7 @@
 ## Skill authoring
 
-Load the `creating-skills` skill before creating or editing a skill.
-
 - User-facing skills live under `skills/<name>/`.
-- Development-tooling skills live under `tools/skills/<name>/`.
 - Vendored third-party skills live under `.agents/skills/` and are pinned in `skills-lock.json`; do not edit them.
-
-OpenCode exposes `tools/skills` as a project skill source and hides the vendored `skill-creator` from model invocation; launch sessions at the repository root so the source resolves.
-
-### Maintaining the `creating-skills` port
-
-Read `docs/agents/creating-skills-maintenance.md` before syncing upstream or updating the port's provenance, pinned commit, or lock hash.
 
 ## Agent skills
 

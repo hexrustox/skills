@@ -11,6 +11,3 @@ dev = [
 
 [tool.uv]
 package = false
-
-[tool.ty.environment]
-extra-paths = ["skills/creating-skills"]

@@ -1,5 +1,2 @@
 .direnv/
 __pycache__/
-
-# Generated skill eval workspaces
-*-workspace/
