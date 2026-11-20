@@ -1,7 +1,5 @@
 # <package> instructions
 
-Applies to `<path>/**`. Inherits the root `AGENTS.md`; this file adds only what differs here.
-
 ## Commands
 
 | Task | Command |

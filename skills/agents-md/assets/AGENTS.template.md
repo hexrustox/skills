@@ -1,6 +1,6 @@
 # AGENTS.md
 
-<Repo> is <one line>. This file is for coding agents; `README.md` is for humans.
+<Repo> is <one line>.
 
 When documentation and existing code disagree, follow the existing code and report the inconsistency.
 
@@ -55,9 +55,9 @@ Run from the repo root unless noted. Requires <runtime/version>; <env vars> must
 
 | Need | Read |
 | --- | --- |
-| Architecture | `<path>` — <what it answers> |
+| Architecture | `docs/agents/architecture.md` — <what it answers> |
 | Subtree rules | `<path>/AGENTS.md` — <when to read it> |
-| Release | `<path>` — <when to read it> |
-| Security | `<path>` — <before touching auth/secrets> |
+| Release | `docs/agents/release.md` — <when to read it> |
+| Security | `docs/agents/security.md` — <before touching auth/secrets> |
 
 _Last verified: <YYYY-MM-DD> · Owner: <team>_

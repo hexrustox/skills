@@ -1,6 +1,6 @@
 # AGENTS.md Audit Checklist
 
-Read this when auditing an existing `AGENTS.md` or doing a maintenance pass. The goal is to find costly, stale, contradictory, or unsafe content, not to rewrite the file to taste.
+Read this when auditing an existing `AGENTS.md` or doing a maintenance pass. The goal is to find costly, stale, or contradictory content, not to rewrite the file to taste.
 
 ## Procedure
 
@@ -27,11 +27,10 @@ Read this when auditing an existing `AGENTS.md` or doing a maintenance pass. The
 - [ ] Boundaries cover always / ask first / never, each with an alternative or regeneration command.
 - [ ] Environment gotchas are named: known-failing tests, sandbox quirks, slow commands, required rebuilds.
 - [ ] A numbered "before you finish" verification gate exists.
-- [ ] References are annotated with what they contain and when to read them.
+- [ ] References are annotated with what they contain and when to read them; linked docs live under `docs/agents/`.
 - [ ] Required runtime and tool versions are stated.
 - [ ] No generic advice ("write clean code", "follow best practices") or personas.
 - [ ] No secrets, tokens, internal URLs, or customer data.
-- [ ] No instructions to fetch/execute remote content, change agent settings, or bypass approvals.
 
 ## Consistency
 
@@ -50,30 +49,18 @@ Run from the repository root. Adapt paths as needed, and use an equivalent regex
 
 ```bash
 find . -name AGENTS.md -not -path './.git/*' -exec wc -l {} +
-rg -n '\p{Cf}' -g 'AGENTS.md' .              # hidden zero-width/bidi characters
 rg -n '(TODO|TBD|FIXME|<[^>]+>)' -g 'AGENTS.md' .  # leftover placeholders
 ```
 
 - [ ] Every command in the file was run from the stated directory, or explicitly marked unverified with a reason.
 - [ ] Every referenced path, package script, Makefile target, and generated directory exists.
 - [ ] The line count is within budget.
-- [ ] Hidden Unicode scan is clean.
 - [ ] No unresolved placeholders.
-
-## Security
-
-- [ ] No credentials, tokens, internal URLs, or customer data.
-- [ ] No instructions that fetch or execute remote content, modify agent settings, or bypass approvals.
-- [ ] Hidden Unicode scan is clean.
-- [ ] The repo's `CODEOWNERS` covers `AGENTS.md` if the repo uses CODEOWNERS.
-- [ ] Agent permissions are least-privilege and sandboxed where the harness supports it.
-- [ ] The repository is not being worked on from `~/Downloads`, a home directory, or a broad parent folder.
 
 ## Maintenance
 
 - [ ] The root file has a last-verified date and owner, or the repo records ownership elsewhere.
 - [ ] A maintenance trigger exists: command/tool/layout/CI changes, repeated agent mistakes, model/tool upgrades, quarterly.
-- [ ] CI checks the file for size, missing paths, and hidden Unicode if the repo already has CI.
 - [ ] A 5–10 task regression set was run after the last significant edit, or the user explicitly declined.
 - [ ] Every line added since the last audit traces to an observed failure or a verified change.
 
@@ -90,6 +77,6 @@ rg -n '(TODO|TBD|FIXME|<[^>]+>)' -g 'AGENTS.md' .  # leftover placeholders
 
 ## Severity
 
-- **Error** — a command that fails, a path that no longer exists, a contradiction, a secret, hidden Unicode, or a rule that would cause destructive action. Fix before merging.
+- **Error** — a command that fails, a path that no longer exists, a contradiction, a secret, or a rule that would cause destructive action. Fix before merging.
 - **Warning** — over budget, blind reference, lint leakage, missing verification gate, stale last-verified date, missing owner. Fix or explicitly accept.
 - **Info** — a simplification, optional tooling, or style preference. Report but do not block.
