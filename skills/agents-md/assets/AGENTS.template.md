@@ -14,7 +14,7 @@ Run from the repo root unless noted. Requires <runtime/version>; <env vars> must
 | Build | `<cmd>` |
 | Test (all) | `<cmd>` |
 | Test (one file) | `<cmd> <path>` |
-| Test (one case) | `<cmd> -t "<name>"` |
+| Test (one case) | `<cmd> <case flag> "<name>"` |
 | Lint | `<cmd>` |
 | Typecheck | `<cmd>` |
 | Format | `<cmd>` |
@@ -41,7 +41,7 @@ Run from the repo root unless noted. Requires <runtime/version>; <env vars> must
 
 ## Gotchas
 
-- <Known failing test / sandbox quirk / slow command / required rebuild step.>
+- <Known failing test / sandbox quirk / slow command / required rebuild step; name the specific failure, not a general warning.>
 
 ## Before you finish
 
@@ -49,7 +49,7 @@ Run from the repo root unless noted. Requires <runtime/version>; <env vars> must
 2. `<targeted test cmd>`
 3. `<lint/typecheck cmd>`
 4. <New behavior has a test; UI change has a snapshot.>
-5. Do not commit unless asked.
+5. <Any repo-specific final check.>
 
 ## References
 
