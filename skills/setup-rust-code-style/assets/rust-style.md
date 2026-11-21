@@ -58,26 +58,19 @@ Grant only the reach an item earns, by rung: private → `pub(super)` (visible t
 
 Choose the tightest rung that compiles and serves the intended caller: an internal helper is `pub(crate)` rather than `pub`; a helper only one module needs is private; a helper the parent's subtree needs is `pub(super)`.
 
-```rust
-// avoid: public when only the crate calls it
-pub fn parse_inner(input: &str) -> Node;
-// prefer: pub(crate) when only the crate calls it
-pub(crate) fn parse_inner(input: &str) -> Node;
-```
-
 ## Ordering
 
 Rust lets items sit in any order — the compiler resolves them regardless of position, except for `macro_rules!`, whose textual scope depends on where it is defined — but the reader gets only the order on disk. Make that order a descent: most abstract at the top, most concrete at the bottom.
 
 A module file opens with its `mod` declarations, then its `use`s, then its items: the entry point or public interface first, the mid-level code driving it next, the small private helpers last, each defined below its first caller. A type precedes its `impl` blocks, inherent before trait; constants serving one type live inside those blocks rather than at file scope.
 
-Read top-down, the file answers *what* before *how*. Inline tests close the file — `#[cfg(test)] mod tests` pins what everything above established. The descent orders items, not statements.
+Read top-down, the file answers *what* before *how*. All inline modules (`mod <ident> { ... }`) pin what everything above established. The descent orders items, not statements.
 
 ## Type annotations
 
 Annotate a binding when the reader cannot infer the type from the line, or when the type is the point of the line — a fact a reader gains from seeing `Duration` at once.
 
-Choose one home for the type, the binding (`let wait: Duration = ...`) or the call (`... .collect::<Vec<_>>()`); a type in two places is a type in none. When the call's name already shows the type, an annotation restates it — leave it off.
+Choose one home for the type, the binding (`let wait: Duration =`) or the call (`.collect::<Vec<_>>()`); a type in two places is a type in none. When the call's name already shows the type, an annotation restates it — leave it off.
 
 ```rust
 // prefer: one home for the type
@@ -89,14 +82,7 @@ let names = rows.collect::<Vec<_>>();
 
 When most fields carry over from an existing value, use functional update — `..base` — for the unchanged tail instead of restating its fields; if `base` must stay usable, restate the fields instead.
 
-Do not mix shorthand with a differently-named binding (`width: w`). Write the named fields longhand in that case; `..base` may still supply the unchanged tail. A non-shorthand expression such as `z: 0` is not a renamed binding and may sit alongside shorthand.
-
 ```rust
 // prefer: functional update for the unchanged tail
 let wider = Rect { width: 20, ..base };
-
-// avoid: shorthand beside a renamed binding
-let rect = Rect { width: w, height };
-// prefer: write the named fields longhand
-let rect = Rect { width: w, height: height };
 ```
