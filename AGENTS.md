@@ -5,6 +5,10 @@
 - Before creating, editing, or reviewing a skill, read `docs/agents/skill-authoring/README.md`.
 - When a skill writes a doc for agents to read, the preferred location is `docs/agents/<topic>.md` in the repo where the skill is invoked.
 
+## Skill audit
+
+For a skill audit of the authored skills in `skills/`, follow `docs/agents/skill-audit.md`. Routine skill edits stay focused on the requested change; wait for an explicit audit request.
+
 ## Agent skills
 
 ### Issue tracker
