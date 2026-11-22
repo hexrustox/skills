@@ -71,6 +71,8 @@ compatibility: Requires Python 3.11+ and network access.
 
 Use `license` when the skill is distributed. Use `compatibility` for environment requirements only: runtime versions, system packages, network access, or required tooling. Add `metadata` or `allowed-tools` only when the skill genuinely needs them.
 
+Set `disable-model-invocation: true` when the skill should run only on an explicit user request. It omits the skill from the model's available skills list, so the model will not discover or choose it on its own; the user can still invoke it directly. Use it for setup, migration, or other routines that should not start on the model's initiative.
+
 ### Body
 
 Write the body as instructions for the agent that will use the skill, not as an essay about the topic.

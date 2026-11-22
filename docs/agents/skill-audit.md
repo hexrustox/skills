@@ -13,9 +13,9 @@ The goal is to find skills that will not trigger, will mislead the agent, will s
 
 - [ ] The description states what the skill does, the situations that invoke it, and the coverage the body delivers.
 - [ ] The description front-loads words the invoking prompt is likely to use and names non-obvious triggers.
-- [ ] Each authored skill has a distinct trigger; when two descriptions collide, name the pair and the job each should win.
-- [ ] When an installed skill fits the same prompts better, this skill distinguishes itself or points at the other skill.
-- [ ] Frontmatter carries only fields that apply: `license` for distribution, `compatibility` for environment requirements, and `metadata` or `allowed-tools` when the skill genuinely needs them.
+- [ ] Each model-invocable skill has a distinct trigger; when two model-invocable descriptions collide, name the pair and the job each should win. Trigger competition applies only to model-invocable skills; `disable-model-invocation: true` removes a skill from the model's available list.
+- [ ] When another installed, model-invocable skill fits the same prompts better, this skill distinguishes itself or points at the other skill.
+- [ ] Frontmatter carries only fields that apply: `license` for distribution, `compatibility` for environment requirements, `disable-model-invocation` for user-only skills, and `metadata` or `allowed-tools` when the skill genuinely needs them.
 - [ ] The body is imperative instructions to the agent, not an essay; each step has a completion criterion.
 - [ ] Exact commands, paths, formats, and non-obvious project facts are present; common knowledge the agent would get right is omitted.
 - [ ] The output contract is explicit: format, required sections, and how to handle uncertainty.
