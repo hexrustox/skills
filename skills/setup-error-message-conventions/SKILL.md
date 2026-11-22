@@ -1,10 +1,10 @@
 ---
-name: setup-error-message-format
+name: setup-error-message-conventions
 description: "Install a project-wide standard for user-facing error messages at docs/agents/error-message.md, with an AGENTS.md pointer. Does not cover logs and does not audit existing messages."
 disable-model-invocation: true
 ---
 
-# Setup Error Message Format
+# Setup Error Message Conventions
 
 Install the canonical error-message standard (`assets/error-message.md`) as `docs/agents/error-message.md`, add one pointer in `AGENTS.md`, and record the repo's conventions under the doc's `## Project conventions` heading.
 

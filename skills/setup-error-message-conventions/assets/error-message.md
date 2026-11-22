@@ -1,4 +1,4 @@
-# Error message format
+# Error message conventions
 
 <!-- Keep ## headings stable: the setup skill merges by heading. -->
 
