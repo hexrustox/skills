@@ -40,7 +40,7 @@ Summarize what is present and missing. Show:
 See `docs/agents/rust-style.md`.
 ```
 
-- `assets/rust-style.md` in full, plus the existing `docs/agents/rust-style.md` if it already exists. The asset is the source for a new or replaced doc; a merge uses the approved merged text; keep leaves the doc untouched.
+- `assets/rust-style.md` in full, plus the existing `docs/agents/rust-style.md` if it already exists.
 - The proposed lint block for the root `Cargo.toml`. For a standalone package:
 
 ```toml
@@ -67,7 +67,6 @@ workspace = true
 - The proposed `clippy.toml`:
 
 ```toml
-min-ident-chars-threshold = 1
 allowed-idents-below-min-chars = ["i", "j", "x", "y", "z", "n"]
 ```
 

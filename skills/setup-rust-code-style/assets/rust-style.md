@@ -34,8 +34,6 @@ Use `crate::` for paths outside the current module and its parent; `super::` for
 
 Group imports three ways: std first, external crates second, crate-local last, with a blank line between the groups. When a crate or module is used more than once, merge its names into one braced import (`use serde::{Deserialize, Serialize}`) rather than one line each.
 
-If the project's rustfmt config (`rustfmt.toml` or `.rustfmt.toml`) sets `group_imports` or `imports_granularity`, the formatter owns import grouping and granularity; the path and alias rules still apply.
-
 When two crates or modules offer the same name, alias on import (`use legacy::Result as LegacyResult`) when the alias is used more than once; leave both fully qualified when each appears once.
 
 ```rust
