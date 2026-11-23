@@ -48,8 +48,7 @@ Run from the repo root unless noted. Requires <runtime/version>; <env vars> must
 1. `<format cmd>`
 2. `<targeted test cmd>`
 3. `<lint/typecheck cmd>`
-4. <New behavior has a test; UI change has a snapshot.>
-5. <Any repo-specific final check.>
+4. <Any repo-specific final check; delete this line if none.>
 
 ## References
 
@@ -57,6 +56,7 @@ Run from the repo root unless noted. Requires <runtime/version>; <env vars> must
 | --- | --- |
 | Architecture | `docs/agents/architecture.md` — <what it answers> |
 | Subtree rules | `<path>/AGENTS.md` — <when to read it> |
+| Skill procedure | `<skill-name>` skill — <when to use it> |
 | Release | `docs/agents/release.md` — <when to read it> |
 | Security | `docs/agents/security.md` — <before touching auth/secrets> |
 

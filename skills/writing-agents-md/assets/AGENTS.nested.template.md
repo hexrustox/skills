@@ -2,6 +2,8 @@
 
 ## Commands
 
+Run from this directory unless noted.
+
 | Task | Command |
 | --- | --- |
 | Test (package) | `<cmd>` |
