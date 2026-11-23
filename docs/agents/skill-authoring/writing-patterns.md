@@ -21,6 +21,10 @@ Keep a line only when the agent would get it wrong without the skill.
 - Remove duplicated explanation. State a rule once, in the place where the agent needs it.
 - If the agent already handles the task well without the skill, add nothing.
 
+## Define terms
+
+When a skill introduces a term of art, abbreviation, or output field, define it at first use. If several terms need definitions, add a short `## Definitions` section or link a glossary. A skill must stand alone: the reader does not have the conversation that produced it.
+
 ## Prefer a procedure
 
 A reusable procedure generalizes; a one-off answer does not.
@@ -121,10 +125,11 @@ Put gotchas where they are read before the mistake happens, usually next to the 
 
 ## Common mistakes
 
-- **Description says what but not when.** Add the concrete triggers.
+- **Description says what but not when.** For a model-invocable skill, add the concrete triggers; for a user-invoked skill, keep it a label that states coverage and boundaries.
 - **Body repeats general knowledge.** Cut it and keep the project-specific detail.
 - **Harness commands leak into the core.** Move harness-specific operations into a reference.
 - **Pointers have no loading condition.** Say when to read the reference.
 - **The skill is overfit to one example.** Express the pattern, not the instance.
 - **The body is too long.** Move branch-specific material into references.
 - **The update renamed the skill.** Preserve the name and directory.
+- **Undefined term.** A term of art, abbreviation, or output field is used without a definition. Define it at first use or link one.

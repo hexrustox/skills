@@ -32,6 +32,7 @@ Ask only questions whose answers change the skill. Cover the gaps left by intent
 
 - **Triggers** — the phrases, adjacent tasks, and near-misses that should and should not invoke the skill.
 - **Outputs** — the file, format, structure, and level of detail expected.
+- **Terminology** — the terms, abbreviations, and output fields a fresh agent would not know.
 - **Edge cases** — unusual inputs, missing data, partial failures, and constraints that regularly bite.
 - **Examples** — a real input and the output a reviewer accepted.
 - **Success criteria** — what a reviewer checks, and what makes an assertion objectively pass or fail.
@@ -50,13 +51,18 @@ Use a precise, lowercase kebab-case name that matches the directory. Keep it sho
 
 ### Description
 
-The description is the only text an agent sees before deciding to load the skill. Make it a trigger, not a summary.
+Write the description for the invocation mode.
+
+For a model-invocable skill, the description is the only text an agent sees before deciding to load the skill. Make it a trigger, not a summary.
 
 - State what the skill does, then the distinct situations that should invoke it.
 - Front-load the words the invoking prompt is likely to use.
 - Include non-obvious triggers and the cases where this skill should win over a nearby one.
 - Keep it concrete. "Use when handling PDF forms, scanned documents, or text extraction" beats "Useful for document tasks."
-- Keep it within 1024 characters.
+
+For a user-invoked skill (`disable-model-invocation: true`), the user chooses when to run it, so the description is a label, not a trigger. State what the skill does and the coverage or boundary of what it changes; omit "Use when" phrasing. The `setup-*` skills are the pattern.
+
+Keep it within 1024 characters.
 
 ### Frontmatter
 
@@ -71,7 +77,7 @@ compatibility: Requires Python 3.11+ and network access.
 
 Use `license` when the skill is distributed. Use `compatibility` for environment requirements only: runtime versions, system packages, network access, or required tooling. Add `metadata` or `allowed-tools` only when the skill genuinely needs them.
 
-Set `disable-model-invocation: true` when the skill should run only on an explicit user request. It omits the skill from the model's available skills list, so the model will not discover or choose it on its own; the user can still invoke it directly. Use it for setup, migration, or other routines that should not start on the model's initiative.
+Set `disable-model-invocation: true` when the skill should run only on an explicit user request. It omits the skill from the model's available skills list, so the model will not discover or choose it on its own; the user can still invoke it directly. Use it for setup, migration, or other routines that should not start on the model's initiative, and rewrite the description as a label rather than a trigger.
 
 ### Body
 
@@ -81,6 +87,7 @@ Write the body as instructions for the agent that will use the skill, not as an 
 - Explain why a step matters when the reason is not obvious; an agent that understands the goal handles unlisted cases better than one following unexplained rules.
 - Prefer a short procedure with one worked example over an exhaustive manual.
 - Include gotchas, exact commands, naming mismatches, and project facts that defy reasonable assumptions.
+- Define skill-specific terms, abbreviations, and output fields at first use, or link a definition; a fresh reader should not need the conversation that produced the skill.
 - Cut explanations of common concepts and anything the agent would get right without the skill.
 - Give each step a completion criterion: what tells the agent the step is done.
 - Keep harness-specific operations out of the core body. Put them in a reference when the skill ships across harnesses.
@@ -108,7 +115,7 @@ When the user is improving a skill rather than creating one:
 1. Keep the original name, directory, and frontmatter name. Do not rename the skill to signal a version.
 2. Read the whole skill, including references and scripts, before changing one part.
 3. Make the smallest coherent change that addresses the feedback.
-4. Update the description if the skill's scope or triggers changed.
+4. Update the description if the skill's scope, triggers, or invocation mode changed.
 5. Remove dead pointers and keep references, scripts, and frontmatter consistent.
 
 Done when the skill still describes one coherent unit of work and every pointer resolves.
