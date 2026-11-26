@@ -1,3 +1,0 @@
-{"type":"step_start","timestamp":1,"sessionID":"ses_test","part":{"id":"prt_1","sessionID":"ses_test","messageID":"msg_1","type":"step-start"}}
-{"type":"tool_use","timestamp":2,"sessionID":"ses_test","part":{"id":"prt_2","sessionID":"ses_test","messageID":"msg_1","type":"tool","tool":"shell","state":{"status":"error","input":{"command":"false"},"error":{"type":"unknown","message":"command failed"},"metadata":{},"time":{}}}}
-{"type":"error","timestamp":3,"sessionID":"ses_test","error":{"type":"unknown","message":"the run failed"}}
