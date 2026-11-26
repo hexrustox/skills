@@ -7,7 +7,7 @@
 
 ## Skill audit
 
-For a skill audit of the authored skills in `skills/`, follow `docs/agents/skill-audit.md`. Routine skill edits stay focused on the requested change; wait for an explicit audit request.
+For a skill audit of the authored skills in `skills/`, follow `docs/agents/skill-audit.md` and keep the record under `docs/agents/skill-audits/`. Default to Verify after a fix; run Full only when no record exists or the skill's job, triggers, output contract, or non-goals changed. Routine skill edits stay focused on the requested change; wait for an explicit audit request.
 
 ## Agent skills
 
