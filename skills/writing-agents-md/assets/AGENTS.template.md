@@ -1,8 +1,6 @@
 # AGENTS.md
 
-<Repo> is <one line>.
-
-When documentation and existing code disagree, follow the existing code and report the inconsistency.
+<Repo> is <one sentence: what it is and its primary stack>.
 
 ## Commands
 
@@ -45,19 +43,15 @@ Run from the repo root unless noted. Requires <runtime/version>; <env vars> must
 
 ## Before you finish
 
-1. `<format cmd>`
-2. `<targeted test cmd>`
-3. `<lint/typecheck cmd>`
+1. Run the `Format` command from `## Commands`, when present.
+2. Run the `Test (one file)` command from `## Commands`, when present.
+3. Run the `Lint` and `Typecheck` commands from `## Commands`, when present.
 4. <Any repo-specific final check; delete this line if none.>
 
 ## References
 
 | Need | Read |
 | --- | --- |
-| Architecture | `docs/agents/architecture.md` — <what it answers> |
+| <topic> | `docs/agents/<topic>.md` — <what it answers and when to read it> |
 | Subtree rules | `<path>/AGENTS.md` — <when to read it> |
 | Skill procedure | `<skill-name>` skill — <when to use it> |
-| Release | `docs/agents/release.md` — <when to read it> |
-| Security | `docs/agents/security.md` — <before touching auth/secrets> |
-
-_Last verified: <YYYY-MM-DD> · Owner: <team>_
