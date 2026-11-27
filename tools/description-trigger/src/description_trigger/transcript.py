@@ -24,12 +24,15 @@ def interpret_transcript(
     text: str,
     returncode: int,
     skill_id: str,
+    *,
+    timed_out: bool = False,
 ) -> TranscriptResult:
     """Decide whether the target skill was loaded by a completed call.
 
     Errors are decisive: a run-level error or a target-call error is ERROR even
     when another target call completed. Pending and running updates only count
-    when no target call reaches a terminal status.
+    when no target call reaches a terminal status. A timeout after a completed
+    target call still triggers; a timeout before one is an error.
     """
     completed_target = False
     target_error: str | None = None
@@ -113,11 +116,12 @@ def interpret_transcript(
             diagnostics=diagnostics,
         )
     if completed_target:
-        note = (
-            f"OpenCode exited with {returncode} after the target skill call"
-            if returncode != 0
-            else None
-        )
+        if timed_out:
+            note = "OpenCode timed out after the target skill call"
+        elif returncode != 0:
+            note = f"OpenCode exited with {returncode} after the target skill call"
+        else:
+            note = None
         return TranscriptResult(
             actual=True,
             note=note,
@@ -125,9 +129,20 @@ def interpret_transcript(
         )
 
     if incomplete_target:
+        error = (
+            "OpenCode timed out before the target skill call completed"
+            if timed_out
+            else "target skill call did not reach a terminal status"
+        )
         return TranscriptResult(
             actual=None,
-            error="target skill call did not reach a terminal status",
+            error=error,
+            diagnostics=diagnostics,
+        )
+    if timed_out:
+        return TranscriptResult(
+            actual=None,
+            error=f"OpenCode timed out before loading {skill_id}",
             diagnostics=diagnostics,
         )
     if returncode != 0:

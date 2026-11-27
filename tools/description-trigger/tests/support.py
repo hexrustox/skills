@@ -14,7 +14,9 @@ SCRIPT = Path(sys.executable).with_name("description-trigger")
 FAKE_OPENCODE_SCRIPT = """\
 import json
 import os
+import signal
 import sys
+import time
 from pathlib import Path
 
 
@@ -83,6 +85,7 @@ cwd = Path.cwd()
             "arguments": arguments,
             "cwd": str(cwd),
             "pwd": os.environ.get("PWD"),
+            "pid": os.getpid(),
         }
     ),
     encoding="utf-8",
@@ -95,6 +98,14 @@ spec_path = os.environ.get("FAKE_OPENCODE_SPEC")
 if spec_path:
     spec = json.loads(Path(spec_path).read_text(encoding="utf-8"))
 response = spec.get("prompts", {}).get(prompt, spec.get("default", {}))
+if response.get("ignore_sigterm"):
+    marker = os.environ.get("FAKE_OPENCODE_SIGTERM_MARKER")
+
+    def handle_sigterm(signum, frame):
+        if marker:
+            Path(marker).touch()
+
+    signal.signal(signal.SIGTERM, handle_sigterm)
 if response.get("verify_probe"):
     stdout = verify_probe(arguments)
 else:
@@ -102,6 +113,11 @@ else:
 sys.stdout.write(stdout)
 stderr = response.get("stderr", "")
 sys.stderr.write(stderr)
+sys.stdout.flush()
+sys.stderr.flush()
+sleep = response.get("sleep")
+if sleep:
+    time.sleep(float(sleep))
 raise SystemExit(response.get("exit", 0))
 """
 

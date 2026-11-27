@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
@@ -72,11 +72,13 @@ def evaluate_cases(
     case_set: CaseSet,
     model: str,
     opencode_version: str,
+    timeout: float,
 ) -> EvaluationReport:
     """Run one isolated probe for every case and collect the results."""
     skill = skill_dir.expanduser().resolve()
     results = tuple(
-        _evaluate_case(skill, case_set.skill_id, case, model) for case in case_set.cases
+        _evaluate_case(skill, case_set.skill_id, case, model, timeout)
+        for case in case_set.cases
     )
     return EvaluationReport(
         skill_id=case_set.skill_id,
@@ -92,6 +94,7 @@ def _evaluate_case(
     skill_id: str,
     case: Case,
     model: str,
+    timeout: float,
 ) -> CaseResult:
     started = time.monotonic()
     probe: Probe | None = None
@@ -99,8 +102,18 @@ def _evaluate_case(
 
     try:
         probe = create_probe(skill_dir, case.identifier, skill_id)
-        run = run_probe(probe, case.prompt, model)
-        outcome = interpret_transcript(run.stdout, run.returncode, skill_id)
+        run = run_probe(probe, case.prompt, model, timeout)
+        outcome = interpret_transcript(
+            run.stdout,
+            run.returncode,
+            skill_id,
+            timed_out=run.timed_out,
+        )
+        if run.timed_out:
+            outcome = replace(
+                outcome,
+                diagnostics=outcome.diagnostics + (run.timeout_diagnostic(timeout),),
+            )
     except ProbeError as probe_error:
         probe = probe_error.probe or probe
         outcome = TranscriptResult(actual=None, error=str(probe_error))

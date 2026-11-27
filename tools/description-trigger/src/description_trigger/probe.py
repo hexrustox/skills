@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 import uuid
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 CONFIG_RELATIVE_PATH = Path(".opencode") / "opencode.json"
@@ -16,6 +18,7 @@ SKILLS_RELATIVE_PATH = Path(".opencode") / "skills"
 TRANSCRIPT_NAME = "transcript.jsonl"
 STDERR_NAME = "stderr.txt"
 PROBE_AGENT_PREFIX = "description-trigger-probe"
+TERMINATION_GRACE_SECONDS = 1.0
 
 
 class ProbeError(Exception):
@@ -37,12 +40,37 @@ class Probe:
     stderr_path: Path
 
 
+class Termination(StrEnum):
+    """How a timed-out probe was stopped."""
+
+    SIGTERM = "SIGTERM"
+    SIGKILL = "SIGKILL"
+
+
 @dataclass(frozen=True)
 class ProbeRun:
     """The process outcome used to interpret the transcript."""
 
     returncode: int
     stdout: str
+    termination: Termination | None = None
+
+    @property
+    def timed_out(self) -> bool:
+        """Whether the probe exceeded its timeout."""
+        return self.termination is not None
+
+    def timeout_diagnostic(self, timeout: float) -> str:
+        """Describe the timeout and the signals used to stop the probe."""
+        diagnostic = f"probe timed out after {timeout:g}s"
+        if self.termination is Termination.SIGKILL:
+            return (
+                f"{diagnostic}; sent SIGTERM, then SIGKILL "
+                f"after {TERMINATION_GRACE_SECONDS:g}s"
+            )
+        if self.termination is Termination.SIGTERM:
+            return f"{diagnostic}; sent SIGTERM"
+        return diagnostic
 
 
 def read_opencode_version() -> str:
@@ -103,8 +131,8 @@ def create_probe(skill_dir: Path, case_id: str, skill_id: str) -> Probe:
     return probe
 
 
-def run_probe(probe: Probe, prompt: str, model: str) -> ProbeRun:
-    """Run OpenCode once in the probe project and retain its output."""
+def run_probe(probe: Probe, prompt: str, model: str, timeout: float) -> ProbeRun:
+    """Run OpenCode once, terminating it if the timeout expires."""
     command = [
         "opencode",
         "run",
@@ -118,32 +146,63 @@ def run_probe(probe: Probe, prompt: str, model: str) -> ProbeRun:
     ]
     environment = {**os.environ, "PWD": str(probe.directory)}
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=probe.directory,
             env=environment,
-            input=prompt,
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
             errors="replace",
-            check=False,
+            start_new_session=True,
         )
     except OSError as error:
         raise ProbeError(
             f"could not run OpenCode in {probe.directory}: {error}"
         ) from error
 
+    termination: Termination | None = None
     try:
-        probe.transcript_path.write_text(completed.stdout, encoding="utf-8")
-        probe.stderr_path.write_text(completed.stderr, encoding="utf-8")
+        stdout, stderr = process.communicate(input=prompt, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        stdout, stderr, termination = _terminate(process)
+
+    try:
+        probe.transcript_path.write_text(stdout, encoding="utf-8")
+        probe.stderr_path.write_text(stderr, encoding="utf-8")
     except OSError as error:
         raise ProbeError(
             f"could not retain probe output in {probe.directory}: {error}",
             probe,
         ) from error
 
-    return ProbeRun(returncode=completed.returncode, stdout=completed.stdout)
+    return ProbeRun(
+        returncode=process.returncode,
+        stdout=stdout,
+        termination=termination,
+    )
+
+
+def _terminate(
+    process: subprocess.Popen[str],
+) -> tuple[str, str, Termination]:
+    """Stop a hung probe with SIGTERM, escalating to SIGKILL after a grace."""
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        stdout, stderr = process.communicate(timeout=TERMINATION_GRACE_SECONDS)
+        return stdout, stderr, Termination.SIGTERM
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        stdout, stderr = process.communicate()
+        return stdout, stderr, Termination.SIGKILL
 
 
 def _probe_config(agent_name: str, skill_id: str) -> dict[str, object]:

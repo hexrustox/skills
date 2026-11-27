@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from typing import Any
@@ -694,6 +696,129 @@ class EvaluateProbeTest(EvaluateTestCase):
         self.assertIn(f"Case file: {self.default_cases}", result.stdout)
         self.assertIn("Model: test/model", result.stdout)
         self.assertIn("OpenCode version: fake-opencode 9.9.9", result.stdout)
+
+
+class EvaluateTimeoutTest(EvaluateTestCase):
+    def hang(
+        self,
+        prompt: str,
+        *,
+        stdout: str = "",
+        ignore_sigterm: bool = False,
+    ) -> None:
+        self.write_spec(
+            prompts={
+                prompt: {
+                    "stdout": stdout,
+                    "sleep": 60,
+                    "ignore_sigterm": ignore_sigterm,
+                }
+            },
+            default={"stdout": "", "exit": 0},
+        )
+
+    def timed_probe(self, case_id: str) -> Path:
+        probes = [
+            probe for probe in self.probe_directories() if f"-{case_id}-" in probe.name
+        ]
+        self.assertEqual(len(probes), 1)
+        return probes[0]
+
+    def assert_process_stopped(self, probe: Path) -> None:
+        invocation = json.loads(
+            (probe / "fake-opencode.json").read_text(encoding="utf-8")
+        )
+        with self.assertRaises(ProcessLookupError):
+            os.kill(invocation["pid"], 0)
+
+    def test_timeout_option_defaults_to_300_seconds(self) -> None:
+        result = self.run_cli("evaluate", "--help")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--timeout", result.stdout)
+        self.assertIn("default: 300)", result.stdout)
+
+    def test_non_positive_timeout_is_rejected(self) -> None:
+        result = self.evaluate("--timeout", "0")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("timeout must be greater than zero", result.stderr)
+        self.assertFalse(self.marker.exists(), "invalid timeout launched OpenCode")
+
+    def test_non_finite_timeout_is_rejected(self) -> None:
+        for value in ("nan", "inf"):
+            with self.subTest(value=value):
+                result = self.evaluate("--timeout", value)
+
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("timeout must be finite", result.stderr)
+                self.assertFalse(
+                    self.marker.exists(), "invalid timeout launched OpenCode"
+                )
+
+    def test_timeout_before_target_call_is_error(self) -> None:
+        self.hang(self.cases["direct-request"]["prompt"])
+
+        started = time.monotonic()
+        result = self.evaluate("--timeout", "0.5")
+        elapsed = time.monotonic() - started
+
+        self.assertLess(elapsed, 10)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("expected=true", result.stdout)
+        self.assertIn("actual=ERROR", result.stdout)
+        self.assertIn(
+            "Error: OpenCode timed out before loading my-skill", result.stdout
+        )
+        self.assertIn(
+            "Diagnostic: probe timed out after 0.5s; sent SIGTERM", result.stdout
+        )
+        probe = self.timed_probe("direct-request")
+        self.assertTrue((probe / "transcript.jsonl").is_file())
+        self.assert_process_stopped(probe)
+
+    def test_timeout_after_completed_target_call_triggers_with_note(self) -> None:
+        self.hang(
+            self.cases["direct-request"]["prompt"],
+            stdout=skill_call_stdout("my-skill"),
+        )
+
+        started = time.monotonic()
+        result = self.evaluate("--timeout", "0.5")
+        elapsed = time.monotonic() - started
+
+        self.assertLess(elapsed, 10)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("PASS direct-request", result.stdout)
+        self.assertIn("expected=true", result.stdout)
+        self.assertIn("actual=true", result.stdout)
+        self.assertIn(
+            "Note: OpenCode timed out after the target skill call", result.stdout
+        )
+        self.assertIn(
+            "Diagnostic: probe timed out after 0.5s; sent SIGTERM", result.stdout
+        )
+        probe = self.timed_probe("direct-request")
+        self.assertTrue((probe / "transcript.jsonl").is_file())
+        self.assert_process_stopped(probe)
+
+    def test_hung_probe_gets_sigkill_after_grace_period(self) -> None:
+        marker = self.temp / "sigterm-received"
+        self.env["FAKE_OPENCODE_SIGTERM_MARKER"] = str(marker)
+        self.hang(self.cases["direct-request"]["prompt"], ignore_sigterm=True)
+
+        started = time.monotonic()
+        result = self.evaluate("--timeout", "0.5")
+        elapsed = time.monotonic() - started
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertTrue(marker.is_file(), "SIGTERM was not delivered")
+        self.assertIn("sent SIGTERM, then SIGKILL after 1s", result.stdout)
+        self.assertGreaterEqual(elapsed, 1.4)
+        self.assertLess(elapsed, 10)
+        self.assert_process_stopped(self.timed_probe("direct-request"))
 
 
 class EvaluateSmokeTest(EvaluateTestCase):

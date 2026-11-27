@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from pathlib import Path
 
@@ -10,6 +11,21 @@ from description_trigger.cases import CaseFileError, CaseSet, load_case_set
 from description_trigger.evaluate import evaluate_cases, format_report
 from description_trigger.probe import ProbeError, read_opencode_version
 from description_trigger.skill import SkillError, validate_skill
+
+DEFAULT_TIMEOUT_SECONDS = 300
+
+
+def _timeout_seconds(value: str) -> float:
+    """Parse a positive timeout duration in seconds."""
+    try:
+        seconds = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("timeout must be a number") from error
+    if not math.isfinite(seconds):
+        raise argparse.ArgumentTypeError("timeout must be finite")
+    if seconds <= 0:
+        raise argparse.ArgumentTypeError("timeout must be greater than zero")
+    return seconds
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -64,6 +80,13 @@ def main(argv: list[str] | None = None) -> int:
         metavar="MODEL",
         help="Model to probe, as provider/model[#variant].",
     )
+    evaluate.add_argument(
+        "--timeout",
+        type=_timeout_seconds,
+        default=DEFAULT_TIMEOUT_SECONDS,
+        metavar="SECONDS",
+        help="Seconds before a probe is terminated (default: %(default)s).",
+    )
     evaluate.set_defaults(handler=_run_evaluate)
 
     arguments = parser.parse_args(argv)
@@ -107,6 +130,7 @@ def _run_evaluate(arguments: argparse.Namespace) -> int:
         case_set,
         arguments.model,
         opencode_version,
+        arguments.timeout,
     )
     print(format_report(report))
     return report.exit_code
