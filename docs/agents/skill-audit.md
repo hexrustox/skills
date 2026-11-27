@@ -1,6 +1,6 @@
 # Skill Audit
 
-The goal is to check whether the skill the user requested will not trigger, will mislead the agent, will surprise the user, or carry stale guidance. The standard is the [skill authoring guide](skill-authoring/README.md); read the guide before judging content.
+The goal is to check whether the skill the user requested will not trigger, will mislead the agent, will surprise the user, or carry stale guidance. The standard is the [skill authoring guide](skill-authoring.md); read the guide before judging content.
 
 An audit is a conformance check against the skill's recorded spec and the guide, not a fresh design review. It ends when every finding has a terminal disposition (`fixed`, `accepted`, or `deferred`); an `open` finding is a decision request for the user, not a reason for another audit. Do not re-report a finding with a terminal disposition unless the text it cites changed or the fix regressed.
 
