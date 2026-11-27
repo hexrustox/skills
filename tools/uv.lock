@@ -2,6 +2,17 @@ version = 1
 revision = 5
 requires-python = ">=3.11"
 
+[manifest]
+members = [
+    "description-trigger",
+    "skills-tools",
+]
+
+[[package]]
+name = "description-trigger"
+version = "0.1.0"
+source = { editable = "description-trigger" }
+
 [[package]]
 name = "ruff"
 version = "0.17.3"

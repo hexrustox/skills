@@ -29,6 +29,8 @@
             "uv_data:/root/.local/share/uv"
           ];
           wrappers = [
+            "description-trigger"
+
             "nixd"
             "skills"
             "uv"
