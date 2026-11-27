@@ -12,11 +12,7 @@ from pathlib import Path
 class CliSmokeTest(unittest.TestCase):
     def test_help_runs_from_outside_the_project(self) -> None:
         script = Path(sys.executable).with_name("description-trigger")
-        self.assertTrue(
-            script.is_file(),
-            f"missing console script at {script}; run the suite with "
-            "`uv run --all-packages python -m unittest ...`",
-        )
+        self.assertTrue(script.exists(), "missing console script")
 
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(
