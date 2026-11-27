@@ -6,7 +6,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from description_trigger.cases import CaseFileError, load_case_set
+from description_trigger.cases import CaseFileError, CaseSet, load_case_set
+from description_trigger.evaluate import evaluate_cases, format_report
+from description_trigger.probe import ProbeError, read_opencode_version
 from description_trigger.skill import SkillError, validate_skill
 
 
@@ -16,7 +18,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="description-trigger",
         description="Test whether skill descriptions trigger when they should.",
     )
-    subparsers = parser.add_subparsers(required=True)
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
     validate = subparsers.add_parser(
         "validate",
@@ -36,17 +38,50 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="Case file to validate instead of the default derived from the skill directory.",
     )
+    validate.set_defaults(handler=_run_validate)
+
+    evaluate = subparsers.add_parser(
+        "evaluate",
+        help="Run one isolated probe per trigger case.",
+        description="Run one isolated OpenCode probe per trigger case.",
+    )
+    evaluate.add_argument(
+        "skill_dir",
+        metavar="skill-dir",
+        type=Path,
+        help="Skill directory to evaluate.",
+    )
+    evaluate.add_argument(
+        "--cases",
+        dest="cases_path",
+        metavar="PATH",
+        type=Path,
+        help="Case file to evaluate instead of the default derived from the skill directory.",
+    )
+    evaluate.add_argument(
+        "--model",
+        required=True,
+        metavar="MODEL",
+        help="Model to probe, as provider/model[#variant].",
+    )
+    evaluate.set_defaults(handler=_run_evaluate)
 
     arguments = parser.parse_args(argv)
-    return _run_validate(arguments)
+    return arguments.handler(arguments)
+
+
+def _preflight(arguments: argparse.Namespace) -> CaseSet | None:
+    try:
+        validate_skill(arguments.skill_dir)
+        return load_case_set(arguments.skill_dir, arguments.cases_path)
+    except (CaseFileError, SkillError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return None
 
 
 def _run_validate(arguments: argparse.Namespace) -> int:
-    try:
-        validate_skill(arguments.skill_dir)
-        case_set = load_case_set(arguments.skill_dir, arguments.cases_path)
-    except (CaseFileError, SkillError) as error:
-        print(f"error: {error}", file=sys.stderr)
+    case_set = _preflight(arguments)
+    if case_set is None:
         return 2
 
     print(f"Skill: {case_set.skill_id}")
@@ -54,3 +89,24 @@ def _run_validate(arguments: argparse.Namespace) -> int:
     print(f"Positive: {case_set.positive_count}")
     print(f"Negative: {case_set.negative_count}")
     return 0
+
+
+def _run_evaluate(arguments: argparse.Namespace) -> int:
+    case_set = _preflight(arguments)
+    if case_set is None:
+        return 2
+
+    try:
+        opencode_version = read_opencode_version()
+    except ProbeError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    report = evaluate_cases(
+        arguments.skill_dir,
+        case_set,
+        arguments.model,
+        opencode_version,
+    )
+    print(format_report(report))
+    return report.exit_code
