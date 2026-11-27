@@ -123,7 +123,7 @@ def skill_call_stdout(
     }
     if status == "completed":
         state["output"] = "loaded"
-    else:
+    elif status == "error":
         state["error"] = "denied"
     event = {
         "type": "tool_use",

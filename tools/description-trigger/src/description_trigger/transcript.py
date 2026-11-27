@@ -25,11 +25,17 @@ def interpret_transcript(
     returncode: int,
     skill_id: str,
 ) -> TranscriptResult:
-    """Decide whether the target skill was loaded by a completed call."""
+    """Decide whether the target skill was loaded by a completed call.
+
+    Errors are decisive: a run-level error or a target-call error is ERROR even
+    when another target call completed. Pending and running updates only count
+    when no target call reaches a terminal status.
+    """
     completed_target = False
     target_error: str | None = None
+    incomplete_target = False
     run_errors: list[str] = []
-    other_skills: list[str] = []
+    other_skills: dict[str, str] = {}
     malformed = False
 
     for line in text.splitlines():
@@ -45,6 +51,9 @@ def interpret_transcript(
             continue
 
         event_type = event.get("type")
+        if not isinstance(event_type, str) or not event_type:
+            malformed = True
+            continue
         if event_type == "error":
             run_errors.append(_error_message(event))
             continue
@@ -55,7 +64,15 @@ def interpret_transcript(
         if not isinstance(part, dict):
             malformed = True
             continue
-        if part.get("type") != "tool" or part.get("tool") != "skill":
+        part_type = part.get("type")
+        if not isinstance(part_type, str) or part_type != "tool":
+            malformed = True
+            continue
+        tool = part.get("tool")
+        if not isinstance(tool, str) or not tool:
+            malformed = True
+            continue
+        if tool != "skill":
             continue
 
         state = part.get("state")
@@ -66,42 +83,27 @@ def interpret_transcript(
         if not identifiers:
             malformed = True
             continue
+        status = state.get("status")
+        status_text = status if isinstance(status, str) else "unknown"
         if skill_id not in identifiers:
-            other_skills.append(identifiers[0])
+            other_skills[identifiers[0]] = status_text
             continue
-        if state.get("status") == "completed":
+        if status == "completed":
             completed_target = True
-        else:
+        elif status == "error":
             target_error = _tool_error_message(state)
+        else:
+            incomplete_target = True
 
-    diagnostics = tuple(
-        [f"other skill loaded: {skill}" for skill in other_skills] + run_errors
-    )
-
-    if completed_target and not run_errors:
-        notes: list[str] = []
-        if returncode != 0:
-            notes.append(
-                f"OpenCode exited with {returncode} after the target skill call"
-            )
-        if target_error is not None:
-            notes.append(f"target skill call also failed: {target_error}")
-        return TranscriptResult(
-            actual=True,
-            note="; ".join(notes) if notes else None,
-            diagnostics=diagnostics,
-        )
+    other_diagnostics = [
+        _other_skill_diagnostic(skill, status) for skill, status in other_skills.items()
+    ]
+    diagnostics = tuple(other_diagnostics + run_errors)
 
     if run_errors:
         return TranscriptResult(
             actual=None,
             error="; ".join(run_errors),
-            diagnostics=diagnostics,
-        )
-    if returncode != 0:
-        return TranscriptResult(
-            actual=None,
-            error=f"OpenCode exited with {returncode} without loading {skill_id}",
             diagnostics=diagnostics,
         )
     if target_error is not None:
@@ -110,13 +112,45 @@ def interpret_transcript(
             error=f"target skill call failed: {target_error}",
             diagnostics=diagnostics,
         )
+    if completed_target:
+        note = (
+            f"OpenCode exited with {returncode} after the target skill call"
+            if returncode != 0
+            else None
+        )
+        return TranscriptResult(
+            actual=True,
+            note=note,
+            diagnostics=diagnostics,
+        )
+
+    if incomplete_target:
+        return TranscriptResult(
+            actual=None,
+            error="target skill call did not reach a terminal status",
+            diagnostics=diagnostics,
+        )
+    if returncode != 0:
+        return TranscriptResult(
+            actual=None,
+            error=f"OpenCode exited with {returncode} without loading {skill_id}",
+            diagnostics=diagnostics,
+        )
     if malformed:
         return TranscriptResult(
             actual=None,
-            error="transcript contained malformed JSON",
+            error="transcript contained a malformed line",
             diagnostics=diagnostics,
         )
     return TranscriptResult(actual=False, diagnostics=diagnostics)
+
+
+def _other_skill_diagnostic(skill: str, status: str) -> str:
+    if status == "completed":
+        return f"other skill loaded: {skill}"
+    if status == "error":
+        return f"other skill call failed: {skill}"
+    return f"other skill call: {skill} ({status})"
 
 
 def _skill_identifiers(value: Any) -> tuple[str, ...]:
@@ -125,7 +159,7 @@ def _skill_identifiers(value: Any) -> tuple[str, ...]:
     return tuple(
         candidate
         for field in (CURRENT_SKILL_FIELD, LEGACY_SKILL_FIELD)
-        if isinstance(candidate := value.get(field), str)
+        if isinstance(candidate := value.get(field), str) and candidate
     )
 
 

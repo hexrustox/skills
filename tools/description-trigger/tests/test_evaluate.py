@@ -235,7 +235,108 @@ class EvaluateResultTest(EvaluateTestCase):
 
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("actual=ERROR", result.stdout)
+        self.assertIn("Error: target skill call failed: denied", result.stdout)
         self.assertIn("Error: 6", result.stdout)
+
+    def test_target_error_after_completed_target_call_is_error(self) -> None:
+        self.write_spec(
+            default={
+                "stdout": skill_call_stdout("my-skill")
+                + skill_call_stdout("my-skill", status="error"),
+                "exit": 0,
+            }
+        )
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("actual=ERROR", result.stdout)
+        self.assertIn("Error: target skill call failed: denied", result.stdout)
+
+    def test_completed_target_call_after_target_error_is_error(self) -> None:
+        self.write_spec(
+            default={
+                "stdout": skill_call_stdout("my-skill", status="error")
+                + skill_call_stdout("my-skill"),
+                "exit": 0,
+            }
+        )
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("actual=ERROR", result.stdout)
+        self.assertIn("Error: target skill call failed: denied", result.stdout)
+
+    def test_target_error_is_reported_before_nonzero_exit(self) -> None:
+        self.write_spec(
+            default={
+                "stdout": skill_call_stdout("my-skill", status="error"),
+                "exit": 1,
+            }
+        )
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("Error: target skill call failed: denied", result.stdout)
+        self.assertNotIn("without loading my-skill", result.stdout)
+
+    def test_running_target_call_then_completed_target_call_triggers(self) -> None:
+        self.write_spec(
+            default={
+                "stdout": skill_call_stdout("my-skill", status="running")
+                + skill_call_stdout("my-skill"),
+                "exit": 0,
+            }
+        )
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("PASS direct-request", result.stdout)
+        self.assertIn("FAIL adjacent-task", result.stdout)
+        self.assertIn("actual=true", result.stdout)
+        self.assertIn("Error: 0", result.stdout)
+
+    def test_running_target_call_without_completion_is_error(self) -> None:
+        self.write_spec(
+            default={
+                "stdout": skill_call_stdout("my-skill", status="running"),
+                "exit": 0,
+            }
+        )
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn(
+            "Error: target skill call did not reach a terminal status",
+            result.stdout,
+        )
+
+    def test_failed_other_skill_call_is_not_reported_as_loaded(self) -> None:
+        self.write_spec(
+            default={
+                "stdout": skill_call_stdout("another-skill", status="error"),
+                "exit": 0,
+            }
+        )
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("FAIL direct-request", result.stdout)
+        self.assertIn("actual=false", result.stdout)
+        self.assertIn(
+            "Diagnostic: other skill call failed: another-skill", result.stdout
+        )
+        self.assertNotIn("other skill loaded: another-skill", result.stdout)
 
     def test_other_skill_call_does_not_trigger(self) -> None:
         self.write_spec(
@@ -248,6 +349,24 @@ class EvaluateResultTest(EvaluateTestCase):
         self.assertIn("FAIL direct-request", result.stdout)
         self.assertIn("actual=false", result.stdout)
         self.assertIn("PASS adjacent-task", result.stdout)
+        self.assertIn("Diagnostic: other skill loaded: another-skill", result.stdout)
+
+    def test_other_skill_call_does_not_change_completed_target_result(self) -> None:
+        self.write_spec(
+            default={
+                "stdout": skill_call_stdout("another-skill")
+                + skill_call_stdout("my-skill"),
+                "exit": 0,
+            }
+        )
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("PASS direct-request", result.stdout)
+        self.assertIn("FAIL adjacent-task", result.stdout)
+        self.assertIn("actual=true", result.stdout)
+        self.assertIn("Diagnostic: other skill loaded: another-skill", result.stdout)
 
     def test_legacy_name_field_is_recognized(self) -> None:
         self.trigger_expected_cases(field="name")
@@ -278,6 +397,28 @@ class EvaluateResultTest(EvaluateTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("actual=true", result.stdout)
 
+    def test_skill_id_match_is_exact(self) -> None:
+        self.write_spec(
+            default={"stdout": skill_call_stdout("my-skill-extra"), "exit": 0}
+        )
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("FAIL direct-request", result.stdout)
+        self.assertIn("actual=false", result.stdout)
+        self.assertIn("Diagnostic: other skill loaded: my-skill-extra", result.stdout)
+
+    def test_skill_id_match_is_case_sensitive(self) -> None:
+        self.write_spec(default={"stdout": skill_call_stdout("My-Skill"), "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("FAIL direct-request", result.stdout)
+        self.assertIn("actual=false", result.stdout)
+        self.assertIn("Diagnostic: other skill loaded: My-Skill", result.stdout)
+
     def test_malformed_transcript_is_error(self) -> None:
         self.write_spec(default={"stdout": "{ not json\n", "exit": 0})
 
@@ -285,6 +426,108 @@ class EvaluateResultTest(EvaluateTestCase):
 
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("Error: transcript contained a malformed line", result.stdout)
+        self.assertIn("Error: 6", result.stdout)
+
+    def test_json_line_without_event_type_is_error(self) -> None:
+        self.write_spec(default={"stdout": '{"unexpected": true}\n', "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("Error: transcript contained a malformed line", result.stdout)
+
+    def test_tool_use_line_without_part_type_is_error(self) -> None:
+        event = {"type": "tool_use", "part": {"sessionID": "ses_probe"}}
+        self.write_spec(default={"stdout": json.dumps(event) + "\n", "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("Error: transcript contained a malformed line", result.stdout)
+
+    def test_tool_use_line_without_tool_name_is_error(self) -> None:
+        event = {"type": "tool_use", "part": {"type": "tool"}}
+        self.write_spec(default={"stdout": json.dumps(event) + "\n", "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("Error: transcript contained a malformed line", result.stdout)
+
+    def test_tool_use_line_with_empty_tool_name_is_error(self) -> None:
+        event = {"type": "tool_use", "part": {"type": "tool", "tool": ""}}
+        self.write_spec(default={"stdout": json.dumps(event) + "\n", "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("Error: transcript contained a malformed line", result.stdout)
+
+    def test_tool_use_line_with_unexpected_part_type_is_error(self) -> None:
+        event = {"type": "tool_use", "part": {"type": "text"}}
+        self.write_spec(default={"stdout": json.dumps(event) + "\n", "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("Error: transcript contained a malformed line", result.stdout)
+
+    def test_empty_event_type_is_error(self) -> None:
+        self.write_spec(default={"stdout": '{"type": ""}\n', "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("Error: transcript contained a malformed line", result.stdout)
+
+    def test_empty_skill_identifier_is_error(self) -> None:
+        self.write_spec(default={"stdout": skill_call_stdout(""), "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("Error: transcript contained a malformed line", result.stdout)
+
+    def test_malformed_line_after_completed_target_call_is_not_error(self) -> None:
+        self.write_spec(
+            default={
+                "stdout": skill_call_stdout("my-skill") + "{ not json\n",
+                "exit": 0,
+            }
+        )
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("PASS direct-request", result.stdout)
+        self.assertIn("FAIL adjacent-task", result.stdout)
+        self.assertIn("actual=true", result.stdout)
+        self.assertIn("Error: 0", result.stdout)
+
+    def test_run_level_error_event_alone_is_error(self) -> None:
+        error_event = json.dumps(
+            {
+                "type": "error",
+                "timestamp": 2,
+                "sessionID": "ses_probe",
+                "error": {"type": "unknown", "message": "probe failed"},
+            }
+        )
+        self.write_spec(default={"stdout": error_event + "\n", "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("Error: probe failed", result.stdout)
         self.assertIn("Error: 6", result.stdout)
 
     def test_run_level_error_event_is_error_not_a_trigger(self) -> None:
@@ -318,6 +561,31 @@ class EvaluateResultTest(EvaluateTestCase):
         self.assertIn("PASS direct-request", result.stdout)
         self.assertIn("FAIL adjacent-task", result.stdout)
         self.assertIn("actual=true", result.stdout)
+        self.assertIn(
+            "Note: OpenCode exited with 1 after the target skill call",
+            result.stdout,
+        )
+
+    def test_error_takes_precedence_over_failure_in_report_and_exit_code(
+        self,
+    ) -> None:
+        prompts = {}
+        for case in self.cases.values():
+            # Expected positives error out; expected negatives trigger and fail.
+            status = "error" if case["expect"] else "completed"
+            prompts[case["prompt"]] = {
+                "stdout": skill_call_stdout("my-skill", status=status),
+            }
+        self.write_spec(prompts=prompts, default={"stdout": "", "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("ERROR direct-request", result.stdout)
+        self.assertIn("FAIL adjacent-task", result.stdout)
+        self.assertIn("Passed: 0", result.stdout)
+        self.assertIn("Failed: 3", result.stdout)
+        self.assertIn("Error: 3", result.stdout)
 
 
 class EvaluateProbeTest(EvaluateTestCase):
