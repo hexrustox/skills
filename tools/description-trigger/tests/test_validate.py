@@ -51,10 +51,29 @@ class ValidateTestCase(unittest.TestCase):
         self.temp = Path(directory.name)
         self.repo = self.temp / "repo"
         self.skill = self.repo / "skills" / "my-skill"
-        self.skill.mkdir(parents=True)
         self.default_cases = (
             self.repo / "tests" / "my-skill" / "description-trigger.json"
         )
+        self.write_skill()
+
+    def write_skill(
+        self,
+        frontmatter: str | None = None,
+        body: str = "# My Skill\n",
+        directory: Path | None = None,
+    ) -> Path:
+        target = directory or self.skill
+        target.mkdir(parents=True, exist_ok=True)
+        if frontmatter is None:
+            frontmatter = (
+                "name: my-skill\n"
+                "description: Summarize documents and pull out the key points."
+            )
+        (target / "SKILL.md").write_text(
+            f"---\n{frontmatter}\n---\n{body}",
+            encoding="utf-8",
+        )
+        return target
 
     def write_cases(
         self,
@@ -95,6 +114,101 @@ class ValidateTestCase(unittest.TestCase):
 
 
 class ValidateSuccessTest(ValidateTestCase):
+    def assert_skill_passes(self) -> None:
+        self.write_cases(valid_cases())
+        result = self.run_cli("validate", self.skill)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Skill: my-skill", result.stdout)
+
+    def test_literal_block_description_is_accepted(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: |\n"
+            "  Summarize documents and pull out the key points.\n"
+            "  Use when the user has a pile of notes."
+        )
+
+        self.assert_skill_passes()
+
+    def test_folded_block_description_is_accepted(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: >\n"
+            "  Summarize documents and pull out the key points.\n"
+            "  Use when the user has a pile of notes."
+        )
+
+        self.assert_skill_passes()
+
+    def test_quoted_description_is_accepted(self) -> None:
+        for quote in ('"', "'"):
+            with self.subTest(quote=quote):
+                self.write_skill(
+                    "name: my-skill\n"
+                    f"description: {quote}Summarize documents: pull out the key points.{quote}"
+                )
+
+                self.assert_skill_passes()
+
+    def test_plain_multiline_description_is_accepted(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: Summarize documents and pull out the key points.\n"
+            "  Use when the user has a pile of notes."
+        )
+
+        self.assert_skill_passes()
+
+    def test_quoted_multiline_description_is_accepted(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            'description: "Summarize documents and pull out the key points.\n'
+            '  Use when the user has a pile of notes."'
+        )
+
+        self.assert_skill_passes()
+
+    def test_indented_block_description_is_accepted(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: |2\n"
+            "  Summarize documents and pull out the key points."
+        )
+
+        self.assert_skill_passes()
+
+    def test_disable_model_invocation_false_is_accepted(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: Summarize documents and pull out the key points.\n"
+            "disable-model-invocation: false"
+        )
+
+        self.assert_skill_passes()
+
+    def test_metadata_autoinvoke_true_is_accepted(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: Summarize documents and pull out the key points.\n"
+            "metadata:\n"
+            "  opencode/autoinvoke: true"
+        )
+
+        self.assert_skill_passes()
+
+    def test_unrelated_metadata_is_accepted(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: Summarize documents and pull out the key points.\n"
+            "metadata:\n"
+            "  credits:\n"
+            "    author: Someone\n"
+            "    opencode/autoinvoke: false"
+        )
+
+        self.assert_skill_passes()
+
     def test_valid_case_file_prints_summary(self) -> None:
         cases = self.write_cases(valid_cases(), self.temp / "elsewhere" / "cases.json")
 
@@ -142,6 +256,16 @@ class ValidateSuccessTest(ValidateTestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertFalse(marker.exists(), "validation launched OpenCode")
 
+    def test_ineligible_skill_rejection_never_launches_opencode(self) -> None:
+        (self.skill / "SKILL.md").unlink()
+        self.write_cases(valid_cases())
+        marker, env = self.fake_opencode_environment()
+
+        result = self.run_cli("validate", self.skill, env=env)
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertFalse(marker.exists(), "validation launched OpenCode")
+
 
 class ValidateRejectionTest(ValidateTestCase):
     def assert_rejected(
@@ -155,6 +279,141 @@ class ValidateRejectionTest(ValidateTestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
         for part in message_parts:
             self.assertIn(part, result.stderr)
+
+    def assert_skill_rejected(
+        self,
+        skill: Path | None = None,
+        *message_parts: str,
+    ) -> None:
+        case_path = self.write_cases(valid_cases(), self.temp / "cases.json")
+        result = self.run_cli("validate", skill or self.skill, "--cases", case_path)
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        for part in message_parts:
+            self.assertIn(part, result.stderr)
+
+    def test_missing_skill_directory_is_rejected(self) -> None:
+        missing = self.repo / "skills" / "missing-skill"
+
+        self.assert_skill_rejected(missing, "skill directory", str(missing))
+
+    def test_missing_skill_manifest_is_rejected(self) -> None:
+        (self.skill / "SKILL.md").unlink()
+
+        self.assert_skill_rejected(None, "SKILL.md")
+
+    def test_non_kebab_case_skill_directory_is_rejected(self) -> None:
+        skill = self.write_skill(directory=self.repo / "skills" / "My_Skill")
+
+        self.assert_skill_rejected(skill, "My_Skill", "kebab-case")
+
+    def test_missing_frontmatter_is_rejected(self) -> None:
+        (self.skill / "SKILL.md").write_text("# My Skill\n", encoding="utf-8")
+
+        self.assert_skill_rejected(None, "frontmatter")
+
+    def test_unterminated_frontmatter_is_rejected(self) -> None:
+        (self.skill / "SKILL.md").write_text(
+            "---\nname: my-skill\ndescription: Summarize documents.\n",
+            encoding="utf-8",
+        )
+
+        self.assert_skill_rejected(None, "frontmatter")
+
+    def test_missing_description_is_rejected(self) -> None:
+        self.write_skill("name: my-skill\ncompatibility: none")
+
+        self.assert_skill_rejected(None, "description")
+
+    def test_empty_description_is_rejected(self) -> None:
+        self.write_skill("name: my-skill\ndescription:")
+
+        self.assert_skill_rejected(None, "description")
+
+    def test_quoted_empty_description_is_rejected(self) -> None:
+        for value in ('""', "''"):
+            with self.subTest(value=value):
+                self.write_skill(f"name: my-skill\ndescription: {value}")
+
+                self.assert_skill_rejected(None, "description")
+
+    def test_escaped_whitespace_description_is_rejected(self) -> None:
+        self.write_skill('name: my-skill\ndescription: "\\n"')
+
+        self.assert_skill_rejected(None, "description")
+
+    def test_whitespace_only_block_description_is_rejected(self) -> None:
+        self.write_skill("name: my-skill\ndescription: |\n   ")
+
+        self.assert_skill_rejected(None, "description")
+
+    def test_non_utf8_skill_manifest_is_rejected(self) -> None:
+        (self.skill / "SKILL.md").write_bytes(b"\xff\xfe")
+
+        self.assert_skill_rejected(None, "UTF-8")
+
+    def test_disable_model_invocation_is_rejected(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: Summarize documents and pull out the key points.\n"
+            "disable-model-invocation: true"
+        )
+
+        self.assert_skill_rejected(None, "disable-model-invocation", "model invocation")
+
+    def test_quoted_disable_model_invocation_is_rejected(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: Summarize documents and pull out the key points.\n"
+            'disable-model-invocation: "true"'
+        )
+
+        self.assert_skill_rejected(None, "disable-model-invocation", "model invocation")
+
+    def test_metadata_autoinvoke_false_is_rejected(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: Summarize documents and pull out the key points.\n"
+            "metadata:\n"
+            "  opencode/autoinvoke: false"
+        )
+
+        self.assert_skill_rejected(
+            None, "metadata.opencode/autoinvoke", "model invocation"
+        )
+
+    def test_quoted_metadata_autoinvoke_false_is_rejected(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: Summarize documents and pull out the key points.\n"
+            "metadata:\n"
+            '  "opencode/autoinvoke": "false"'
+        )
+
+        self.assert_skill_rejected(
+            None, "metadata.opencode/autoinvoke", "model invocation"
+        )
+
+    def test_flow_metadata_is_rejected_as_unsupported(self) -> None:
+        self.write_skill(
+            "name: my-skill\n"
+            "description: Summarize documents and pull out the key points.\n"
+            "metadata: { opencode/autoinvoke: false }"
+        )
+
+        self.assert_skill_rejected(None, "metadata", "block syntax")
+
+    def test_whitespace_only_indented_block_description_is_rejected(self) -> None:
+        self.write_skill("name: my-skill\ndescription: |2\n  ")
+
+        self.assert_skill_rejected(None, "description")
+
+    def test_non_string_description_is_rejected(self) -> None:
+        for value in ("false", "42", "[]", "{}"):
+            with self.subTest(value=value):
+                self.write_skill(f"name: my-skill\ndescription: {value}")
+
+                self.assert_skill_rejected(None, "description")
 
     def test_missing_default_case_file_reports_computed_path_and_hint(self) -> None:
         result = self.run_cli("validate", self.skill)

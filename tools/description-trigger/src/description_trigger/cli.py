@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from description_trigger.cases import CaseFileError, load_case_set
+from description_trigger.skill import SkillError, validate_skill
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,8 +20,8 @@ def main(argv: list[str] | None = None) -> int:
 
     validate = subparsers.add_parser(
         "validate",
-        help="Validate one skill's trigger case file.",
-        description="Validate one skill's trigger case file without running OpenCode.",
+        help="Validate one skill and its trigger case file.",
+        description="Validate one skill and its trigger case file without running OpenCode.",
     )
     validate.add_argument(
         "skill_dir",
@@ -42,8 +43,9 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run_validate(arguments: argparse.Namespace) -> int:
     try:
+        validate_skill(arguments.skill_dir)
         case_set = load_case_set(arguments.skill_dir, arguments.cases_path)
-    except CaseFileError as error:
+    except (CaseFileError, SkillError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
