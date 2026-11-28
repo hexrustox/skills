@@ -131,7 +131,24 @@ def create_probe(skill_dir: Path, case_id: str, skill_id: str) -> Probe:
     return probe
 
 
-def run_probe(probe: Probe, prompt: str, model: str, timeout: float) -> ProbeRun:
+def remove_probe(probe: Probe) -> bool:
+    """Delete a probe directory and report whether it is gone."""
+    try:
+        shutil.rmtree(probe.directory)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def run_probe(
+    probe: Probe,
+    prompt: str,
+    model: str,
+    timeout: float,
+    standalone: bool = False,
+) -> ProbeRun:
     """Run OpenCode once, terminating it if the timeout expires."""
     command = [
         "opencode",
@@ -144,6 +161,8 @@ def run_probe(probe: Probe, prompt: str, model: str, timeout: float) -> ProbeRun
         model,
         "--archived",
     ]
+    if standalone:
+        command.append("--standalone")
     environment = {**os.environ, "PWD": str(probe.directory)}
     try:
         process = subprocess.Popen(

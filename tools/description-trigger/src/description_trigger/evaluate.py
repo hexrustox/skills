@@ -10,7 +10,13 @@ from functools import partial
 from pathlib import Path
 
 from description_trigger.cases import Case, CaseSet
-from description_trigger.probe import Probe, ProbeError, create_probe, run_probe
+from description_trigger.probe import (
+    Probe,
+    ProbeError,
+    create_probe,
+    remove_probe,
+    run_probe,
+)
 from description_trigger.transcript import TranscriptResult, interpret_transcript
 
 
@@ -100,12 +106,16 @@ def evaluate_cases(
     timeout: float,
     repeats: int = 1,
     jobs: int = 1,
+    keep: bool = False,
+    standalone: bool = False,
 ) -> EvaluationReport:
     """Run every case and repeat as an isolated probe and collect the results."""
     skill = skill_dir.expanduser().resolve()
     started = time.monotonic()
     cases = [case for case in case_set.cases for _ in range(repeats)]
-    evaluate_run = partial(_evaluate_run, skill, case_set.skill_id, model, timeout)
+    evaluate_run = partial(
+        _evaluate_run, skill, case_set.skill_id, model, timeout, standalone
+    )
     with ThreadPoolExecutor(max_workers=jobs) as executor:
         futures = [executor.submit(evaluate_run, case) for case in cases]
         runs = [future.result() for future in futures]
@@ -121,6 +131,8 @@ def evaluate_cases(
         _aggregate_case(case, tuple(runs_by_case[case.identifier]))
         for case in case_set.cases
     )
+    if not keep:
+        results = tuple(_discard_passing_probes(result) for result in results)
     return EvaluationReport(
         skill_id=case_set.skill_id,
         case_path=case_set.path,
@@ -136,6 +148,7 @@ def _evaluate_run(
     skill_id: str,
     model: str,
     timeout: float,
+    standalone: bool,
     case: Case,
 ) -> RunResult:
     started = time.monotonic()
@@ -144,7 +157,7 @@ def _evaluate_run(
 
     try:
         probe = create_probe(skill_dir, case.identifier, skill_id)
-        run = run_probe(probe, case.prompt, model, timeout)
+        run = run_probe(probe, case.prompt, model, timeout, standalone=standalone)
         outcome = interpret_transcript(
             run.stdout,
             run.returncode,
@@ -185,6 +198,19 @@ def _aggregate_case(case: Case, runs: tuple[RunResult, ...]) -> CaseResult:
     )
 
 
+def _discard_passing_probes(result: CaseResult) -> CaseResult:
+    if result.state is not ResultState.PASS:
+        return result
+    runs = tuple(_discard_probe(run) for run in result.runs)
+    return replace(result, runs=runs)
+
+
+def _discard_probe(run: RunResult) -> RunResult:
+    if run.probe is None or not remove_probe(run.probe):
+        return run
+    return replace(run, probe=None)
+
+
 def format_report(report: EvaluationReport) -> str:
     """Render the per-case results and run metadata."""
     lines: list[str] = []
@@ -211,6 +237,8 @@ def format_report(report: EvaluationReport) -> str:
                 lines.append(f"  {prefix}Diagnostic: {diagnostic}")
             if run.probe is not None:
                 lines.append(f"  {prefix}Probe directory: {run.probe.directory}")
+                lines.append(f"  {prefix}Transcript: {run.probe.transcript_path}")
+                lines.append(f"  {prefix}Stderr: {run.probe.stderr_path}")
 
     lines.extend(
         [

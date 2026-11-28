@@ -114,6 +114,16 @@ def main(argv: list[str] | None = None) -> int:
         metavar="SECONDS",
         help="Seconds before a probe is terminated (default: %(default)s).",
     )
+    evaluate.add_argument(
+        "--keep",
+        action="store_true",
+        help="Keep every probe directory, including passing probes.",
+    )
+    evaluate.add_argument(
+        "--standalone",
+        action="store_true",
+        help="Pass --standalone to opencode run to avoid a shared background service.",
+    )
     evaluate.set_defaults(handler=_run_evaluate)
 
     arguments = parser.parse_args(argv)
@@ -158,8 +168,10 @@ def _run_evaluate(arguments: argparse.Namespace) -> int:
         arguments.model,
         opencode_version,
         arguments.timeout,
-        arguments.repeats,
-        arguments.jobs,
+        repeats=arguments.repeats,
+        jobs=arguments.jobs,
+        keep=arguments.keep,
+        standalone=arguments.standalone,
     )
     print(format_report(report))
     return report.exit_code

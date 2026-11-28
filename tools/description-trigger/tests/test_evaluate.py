@@ -194,6 +194,13 @@ class EvaluateInvocationTest(EvaluateTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"Case file: {cases}", result.stdout)
 
+    def test_keep_and_standalone_are_documented_options(self) -> None:
+        result = self.run_cli("evaluate", "--help")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--keep", result.stdout)
+        self.assertIn("--standalone", result.stdout)
+
     def test_repeats_and_jobs_default_to_one(self) -> None:
         result = self.run_cli("evaluate", "--help")
 
@@ -654,7 +661,7 @@ class EvaluateRepeatTest(EvaluateTestCase):
     def test_each_case_and_repeat_gets_a_fresh_project(self) -> None:
         self.trigger_expected_cases()
 
-        result = self.evaluate("--repeats", "2", "--jobs", "2")
+        result = self.evaluate("--repeats", "2", "--jobs", "2", "--keep")
 
         self.assertEqual(result.returncode, 0, result.stderr)
         probes = self.probe_directories()
@@ -848,7 +855,7 @@ class EvaluateProbeTest(EvaluateTestCase):
     def test_each_case_gets_a_fresh_project_with_only_the_target_skill(self) -> None:
         self.trigger_expected_cases()
 
-        result = self.evaluate()
+        result = self.evaluate("--keep")
 
         self.assertEqual(result.returncode, 0, result.stderr)
         probes = self.probe_directories()
@@ -882,7 +889,7 @@ class EvaluateProbeTest(EvaluateTestCase):
     def test_probe_command_uses_json_agent_model_archived_and_stdin(self) -> None:
         self.trigger_expected_cases()
 
-        result = self.evaluate()
+        result = self.evaluate("--keep")
 
         self.assertEqual(result.returncode, 0, result.stderr)
         for probe in self.probe_directories():
@@ -908,17 +915,34 @@ class EvaluateProbeTest(EvaluateTestCase):
             prompt = (probe / "fake-prompt.txt").read_text(encoding="utf-8")
             self.assertIn(prompt, {case["prompt"] for case in self.cases.values()})
 
-    def test_probe_directories_keep_config_transcript_and_stderr(self) -> None:
+    def test_keep_probe_directories_keep_config_transcript_and_stderr(self) -> None:
         self.trigger_expected_cases()
 
-        result = self.evaluate()
+        result = self.evaluate("--keep")
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        for probe in self.probe_directories():
+        probes = self.probe_directories()
+        self.assertEqual(len(probes), len(self.cases))
+        for probe in probes:
             self.assertTrue((probe / ".opencode" / "opencode.json").is_file())
             self.assertTrue((probe / "transcript.jsonl").is_file())
             self.assertTrue((probe / "stderr.txt").is_file())
-            self.assertIn("Probe directory:", result.stdout)
+            self.assertIn(f"Probe directory: {probe}", result.stdout)
+            self.assertIn(f"Transcript: {probe / 'transcript.jsonl'}", result.stdout)
+            self.assertIn(f"Stderr: {probe / 'stderr.txt'}", result.stdout)
+
+    def test_standalone_is_passed_through_to_opencode(self) -> None:
+        self.trigger_expected_cases()
+
+        result = self.evaluate("--keep", "--standalone")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for probe in self.probe_directories():
+            invocation = json.loads(
+                (probe / "fake-opencode.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(invocation["arguments"][-1], "--standalone")
+            self.assertIn("--archived", invocation["arguments"])
 
     def test_error_probe_directories_keep_transcript_and_stderr(self) -> None:
         self.write_spec(default={"stdout": "", "stderr": "probe failed\n", "exit": 1})
@@ -936,6 +960,8 @@ class EvaluateProbeTest(EvaluateTestCase):
                 "probe failed\n",
             )
             self.assertIn(str(probe), result.stdout)
+            self.assertIn(f"Transcript: {probe / 'transcript.jsonl'}", result.stdout)
+            self.assertIn(f"Stderr: {probe / 'stderr.txt'}", result.stdout)
 
     def test_report_records_run_metadata(self) -> None:
         self.trigger_expected_cases()
@@ -950,6 +976,62 @@ class EvaluateProbeTest(EvaluateTestCase):
         self.assertIn(f"Case file: {self.default_cases}", result.stdout)
         self.assertIn("Model: test/model", result.stdout)
         self.assertIn("OpenCode version: fake-opencode 9.9.9", result.stdout)
+
+
+class EvaluateCleanupTest(EvaluateTestCase):
+    def test_passing_probe_directories_are_deleted_by_default(self) -> None:
+        self.trigger_expected_cases()
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.probe_directories(), [])
+        self.assertNotIn("Probe directory:", result.stdout)
+        self.assertNotIn("Transcript:", result.stdout)
+        self.assertNotIn("Stderr:", result.stdout)
+
+    def test_failing_probe_directories_are_retained_with_output(self) -> None:
+        self.write_spec(default={"stdout": "", "stderr": "probe note\n", "exit": 0})
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        failing_prompts = {
+            case["prompt"] for case in self.cases.values() if case["expect"]
+        }
+        probes = self.probe_directories()
+        self.assertEqual(len(probes), len(failing_prompts))
+        for probe in probes:
+            prompt = (probe / "fake-prompt.txt").read_text(encoding="utf-8")
+            self.assertIn(prompt, failing_prompts)
+            self.assertTrue((probe / "transcript.jsonl").is_file())
+            self.assertEqual(
+                (probe / "stderr.txt").read_text(encoding="utf-8"),
+                "probe note\n",
+            )
+            self.assertIn(f"Probe directory: {probe}", result.stdout)
+            self.assertIn(f"Transcript: {probe / 'transcript.jsonl'}", result.stdout)
+            self.assertIn(f"Stderr: {probe / 'stderr.txt'}", result.stdout)
+
+    def test_failing_case_retains_every_repeat_directory(self) -> None:
+        self.env["FAKE_OPENCODE_STATE"] = str(self.temp / "state")
+        prompts = self.triggering_prompts()
+        prompts[self.cases["direct-request"]["prompt"]] = [
+            {"stdout": skill_call_stdout("my-skill")},
+            {"stdout": "", "exit": 0},
+        ]
+        self.write_spec(prompts=prompts, default={"stdout": "", "exit": 0})
+
+        result = self.evaluate("--repeats", "2")
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        probes = self.probe_directories()
+        self.assertEqual(len(probes), 2)
+        for probe in probes:
+            self.assertIn("-direct-request-", probe.name)
+            self.assertTrue((probe / "transcript.jsonl").is_file())
+            self.assertTrue((probe / "stderr.txt").is_file())
+            self.assertIn(f"Probe directory: {probe}", result.stdout)
 
 
 class EvaluateTimeoutTest(EvaluateTestCase):
@@ -1039,7 +1121,7 @@ class EvaluateTimeoutTest(EvaluateTestCase):
         )
 
         started = time.monotonic()
-        result = self.evaluate("--timeout", "0.5")
+        result = self.evaluate("--timeout", "0.5", "--keep")
         elapsed = time.monotonic() - started
 
         self.assertLess(elapsed, 10)
