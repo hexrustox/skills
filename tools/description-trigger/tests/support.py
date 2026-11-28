@@ -12,12 +12,58 @@ from typing import Any
 SCRIPT = Path(sys.executable).with_name("description-trigger")
 
 FAKE_OPENCODE_SCRIPT = """\
+import fcntl
+import hashlib
 import json
 import os
 import signal
 import sys
 import time
 from pathlib import Path
+
+
+def log_event(event: str) -> None:
+    path = os.environ.get("FAKE_OPENCODE_EVENT_LOG")
+    if not path:
+        return
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps({"event": event, "time": time.time(), "pid": os.getpid()})
+            + "\\n"
+        )
+
+
+def wait_for_peers() -> None:
+    directory_path = os.environ.get("FAKE_OPENCODE_PEER_DIR")
+    if not directory_path:
+        return
+    expected = int(os.environ.get("FAKE_OPENCODE_EXPECT_PEERS", "1"))
+    directory = Path(directory_path)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{os.getpid()}.peer").touch()
+    deadline = time.monotonic() + 5
+    while len(list(directory.iterdir())) < expected and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+
+def next_response_index(key: str) -> int:
+    state_directory = os.environ.get("FAKE_OPENCODE_STATE")
+    if not state_directory:
+        return 0
+    directory = Path(state_directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    counter_path = directory / f"{digest}.count"
+    with open(counter_path, "a+", encoding="utf-8") as counter:
+        fcntl.flock(counter, fcntl.LOCK_EX)
+        counter.seek(0)
+        raw = counter.read().strip()
+        index = int(raw) if raw else 0
+        counter.seek(0)
+        counter.truncate()
+        counter.write(str(index + 1))
+        counter.flush()
+    return index
 
 
 def skill_call(skill_id: str) -> str:
@@ -78,6 +124,8 @@ if arguments == ["--version"]:
     print(os.environ.get("FAKE_OPENCODE_VERSION", "fake-opencode 9.9.9"))
     raise SystemExit(0)
 
+log_event("start")
+wait_for_peers()
 cwd = Path.cwd()
 (cwd / "fake-opencode.json").write_text(
     json.dumps(
@@ -97,7 +145,16 @@ spec = {}
 spec_path = os.environ.get("FAKE_OPENCODE_SPEC")
 if spec_path:
     spec = json.loads(Path(spec_path).read_text(encoding="utf-8"))
-response = spec.get("prompts", {}).get(prompt, spec.get("default", {}))
+prompts = spec.get("prompts", {})
+if prompt in prompts:
+    response = prompts[prompt]
+    response_key = prompt
+else:
+    response = spec.get("default", {})
+    response_key = "<default>"
+if isinstance(response, list):
+    index = next_response_index(response_key)
+    response = response[index % len(response)] if response else {}
 if response.get("ignore_sigterm"):
     marker = os.environ.get("FAKE_OPENCODE_SIGTERM_MARKER")
 
@@ -118,6 +175,7 @@ sys.stderr.flush()
 sleep = response.get("sleep")
 if sleep:
     time.sleep(float(sleep))
+log_event("end")
 raise SystemExit(response.get("exit", 0))
 """
 

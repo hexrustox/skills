@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from functools import partial
 from pathlib import Path
 
 from description_trigger.cases import Case, CaseSet
@@ -21,15 +23,37 @@ class ResultState(StrEnum):
 
 
 @dataclass(frozen=True)
+class RunResult:
+    """One probe run and the transcript interpretation it produced."""
+
+    duration: float
+    probe: Probe | None
+    outcome: TranscriptResult
+
+
+@dataclass(frozen=True)
 class CaseResult:
-    """One case's expected outcome and the probe's interpretation."""
+    """One case's expected outcome and all of its repeat runs."""
 
     case_id: str
     expected: bool
     state: ResultState
     duration: float
-    probe: Probe | None
-    outcome: TranscriptResult
+    runs: tuple[RunResult, ...]
+
+    @property
+    def actuals(self) -> tuple[bool | None, ...]:
+        """The actual trigger of every repeat, in run order."""
+        return _actuals(self.runs)
+
+    @property
+    def matched(self) -> int:
+        """The number of repeats that matched the expectation."""
+        return sum(actual == self.expected for actual in self.actuals)
+
+
+def _actuals(runs: tuple[RunResult, ...]) -> tuple[bool | None, ...]:
+    return tuple(run.outcome.actual for run in runs)
 
 
 @dataclass(frozen=True)
@@ -41,6 +65,7 @@ class EvaluationReport:
     model: str
     opencode_version: str
     results: tuple[CaseResult, ...]
+    total_duration: float
 
     @property
     def passed(self) -> int:
@@ -55,8 +80,8 @@ class EvaluationReport:
         return sum(result.state == ResultState.ERROR for result in self.results)
 
     @property
-    def total_duration(self) -> float:
-        return sum(result.duration for result in self.results)
+    def total_runs(self) -> int:
+        return sum(len(result.runs) for result in self.results)
 
     @property
     def exit_code(self) -> int:
@@ -73,11 +98,27 @@ def evaluate_cases(
     model: str,
     opencode_version: str,
     timeout: float,
+    repeats: int = 1,
+    jobs: int = 1,
 ) -> EvaluationReport:
-    """Run one isolated probe for every case and collect the results."""
+    """Run every case and repeat as an isolated probe and collect the results."""
     skill = skill_dir.expanduser().resolve()
+    started = time.monotonic()
+    cases = [case for case in case_set.cases for _ in range(repeats)]
+    evaluate_run = partial(_evaluate_run, skill, case_set.skill_id, model, timeout)
+    with ThreadPoolExecutor(max_workers=jobs) as executor:
+        futures = [executor.submit(evaluate_run, case) for case in cases]
+        runs = [future.result() for future in futures]
+    total_duration = time.monotonic() - started
+
+    runs_by_case: dict[str, list[RunResult]] = {
+        case.identifier: [] for case in case_set.cases
+    }
+    for case, run in zip(cases, runs):
+        runs_by_case[case.identifier].append(run)
+
     results = tuple(
-        _evaluate_case(skill, case_set.skill_id, case, model, timeout)
+        _aggregate_case(case, tuple(runs_by_case[case.identifier]))
         for case in case_set.cases
     )
     return EvaluationReport(
@@ -86,16 +127,17 @@ def evaluate_cases(
         model=model,
         opencode_version=opencode_version,
         results=results,
+        total_duration=total_duration,
     )
 
 
-def _evaluate_case(
+def _evaluate_run(
     skill_dir: Path,
     skill_id: str,
-    case: Case,
     model: str,
     timeout: float,
-) -> CaseResult:
+    case: Case,
+) -> RunResult:
     started = time.monotonic()
     probe: Probe | None = None
     outcome = TranscriptResult(actual=None)
@@ -118,10 +160,18 @@ def _evaluate_case(
         probe = probe_error.probe or probe
         outcome = TranscriptResult(actual=None, error=str(probe_error))
 
-    duration = time.monotonic() - started
-    if outcome.actual is None:
+    return RunResult(
+        duration=time.monotonic() - started,
+        probe=probe,
+        outcome=outcome,
+    )
+
+
+def _aggregate_case(case: Case, runs: tuple[RunResult, ...]) -> CaseResult:
+    actuals = _actuals(runs)
+    if any(actual is None for actual in actuals):
         state = ResultState.ERROR
-    elif outcome.actual == case.expected_trigger:
+    elif all(actual == case.expected_trigger for actual in actuals):
         state = ResultState.PASS
     else:
         state = ResultState.FAIL
@@ -130,9 +180,8 @@ def _evaluate_case(
         case_id=case.identifier,
         expected=case.expected_trigger,
         state=state,
-        duration=duration,
-        probe=probe,
-        outcome=outcome,
+        duration=sum(run.duration for run in runs),
+        runs=runs,
     )
 
 
@@ -140,20 +189,28 @@ def format_report(report: EvaluationReport) -> str:
     """Render the per-case results and run metadata."""
     lines: list[str] = []
     for result in report.results:
+        actuals = ",".join(_format_actual(actual) for actual in result.actuals)
+        matched = (
+            f" matched={result.matched}/{len(result.runs)}"
+            if len(result.runs) > 1
+            else ""
+        )
         lines.append(
             f"{result.state} {result.case_id} "
             f"expected={_format_trigger(result.expected)} "
-            f"actual={_format_actual(result.outcome.actual)} "
+            f"actual={actuals}{matched} "
             f"duration={result.duration:.2f}s"
         )
-        if result.outcome.note:
-            lines.append(f"  Note: {result.outcome.note}")
-        if result.outcome.error:
-            lines.append(f"  Error: {result.outcome.error}")
-        for diagnostic in result.outcome.diagnostics:
-            lines.append(f"  Diagnostic: {diagnostic}")
-        if result.probe is not None:
-            lines.append(f"  Probe directory: {result.probe.directory}")
+        for index, run in enumerate(result.runs, start=1):
+            prefix = f"Run {index}: " if len(result.runs) > 1 else ""
+            if run.outcome.note:
+                lines.append(f"  {prefix}Note: {run.outcome.note}")
+            if run.outcome.error:
+                lines.append(f"  {prefix}Error: {run.outcome.error}")
+            for diagnostic in run.outcome.diagnostics:
+                lines.append(f"  {prefix}Diagnostic: {diagnostic}")
+            if run.probe is not None:
+                lines.append(f"  {prefix}Probe directory: {run.probe.directory}")
 
     lines.extend(
         [
@@ -163,7 +220,7 @@ def format_report(report: EvaluationReport) -> str:
             f"  Failed: {report.failed}",
             f"  Error: {report.errored}",
             f"  Cases: {len(report.results)}",
-            f"  Runs: {len(report.results)}",
+            f"  Runs: {report.total_runs}",
             f"  Total duration: {report.total_duration:.2f}s",
             f"  Skill: {report.skill_id}",
             f"  Case file: {report.case_path}",

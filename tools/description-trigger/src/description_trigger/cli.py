@@ -13,6 +13,19 @@ from description_trigger.probe import ProbeError, read_opencode_version
 from description_trigger.skill import SkillError, validate_skill
 
 DEFAULT_TIMEOUT_SECONDS = 300
+DEFAULT_REPEATS = 1
+DEFAULT_JOBS = 1
+
+
+def _positive_int(value: str) -> int:
+    """Parse a positive whole number."""
+    try:
+        number = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be an integer") from error
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return number
 
 
 def _timeout_seconds(value: str) -> float:
@@ -81,6 +94,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Model to probe, as provider/model[#variant].",
     )
     evaluate.add_argument(
+        "--repeats",
+        type=_positive_int,
+        default=DEFAULT_REPEATS,
+        metavar="N",
+        help="Run each case N times (default: %(default)s).",
+    )
+    evaluate.add_argument(
+        "--jobs",
+        type=_positive_int,
+        default=DEFAULT_JOBS,
+        metavar="N",
+        help="Run up to N probes in parallel (default: %(default)s).",
+    )
+    evaluate.add_argument(
         "--timeout",
         type=_timeout_seconds,
         default=DEFAULT_TIMEOUT_SECONDS,
@@ -131,6 +158,8 @@ def _run_evaluate(arguments: argparse.Namespace) -> int:
         arguments.model,
         opencode_version,
         arguments.timeout,
+        arguments.repeats,
+        arguments.jobs,
     )
     print(format_report(report))
     return report.exit_code

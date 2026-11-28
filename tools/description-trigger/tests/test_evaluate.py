@@ -14,6 +14,7 @@ from typing import Any
 from support import install_fake_opencode, run_cli, skill_call_stdout
 
 JsonPayload = str | dict[str, Any] | list[Any]
+Response = dict[str, Any] | list[dict[str, Any]]
 
 
 def valid_cases() -> dict[str, Any]:
@@ -103,8 +104,8 @@ class EvaluateTestCase(unittest.TestCase):
     def write_spec(
         self,
         *,
-        prompts: dict[str, dict[str, Any]] | None = None,
-        default: dict[str, Any] | None = None,
+        prompts: dict[str, Response] | None = None,
+        default: Response | None = None,
     ) -> Path:
         self.spec_path.write_text(
             json.dumps({"prompts": prompts or {}, "default": default or {}}),
@@ -123,6 +124,13 @@ class EvaluateTestCase(unittest.TestCase):
             },
             default={"stdout": "", "exit": 0},
         )
+
+    def triggering_prompts(self) -> dict[str, Response]:
+        return {
+            case["prompt"]: {"stdout": skill_call_stdout("my-skill")}
+            for case in self.cases.values()
+            if case["expect"]
+        }
 
     def run_cli(
         self,
@@ -185,6 +193,58 @@ class EvaluateInvocationTest(EvaluateTestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"Case file: {cases}", result.stdout)
+
+    def test_repeats_and_jobs_default_to_one(self) -> None:
+        result = self.run_cli("evaluate", "--help")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--repeats", result.stdout)
+        self.assertIn("--jobs", result.stdout)
+        self.assertGreaterEqual(result.stdout.count("(default: 1)"), 2)
+
+    def test_non_positive_repeats_is_rejected_before_launching_opencode(self) -> None:
+        for value in ("0", "-1"):
+            with self.subTest(value=value):
+                self.marker.unlink(missing_ok=True)
+
+                result = self.evaluate("--repeats", value)
+
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("--repeats", result.stderr)
+                self.assertIn("greater than zero", result.stderr)
+                self.assertFalse(
+                    self.marker.exists(), "invalid repeats launched OpenCode"
+                )
+                self.assertEqual(self.probe_directories(), [])
+
+    def test_non_integer_repeats_is_rejected(self) -> None:
+        result = self.evaluate("--repeats", "many")
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("--repeats", result.stderr)
+        self.assertIn("integer", result.stderr)
+        self.assertFalse(self.marker.exists(), "invalid repeats launched OpenCode")
+
+    def test_non_positive_jobs_is_rejected_before_launching_opencode(self) -> None:
+        for value in ("0", "-1"):
+            with self.subTest(value=value):
+                self.marker.unlink(missing_ok=True)
+
+                result = self.evaluate("--jobs", value)
+
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("--jobs", result.stderr)
+                self.assertIn("greater than zero", result.stderr)
+                self.assertFalse(self.marker.exists(), "invalid jobs launched OpenCode")
+                self.assertEqual(self.probe_directories(), [])
+
+    def test_non_integer_jobs_is_rejected(self) -> None:
+        result = self.evaluate("--jobs", "many")
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("--jobs", result.stderr)
+        self.assertIn("integer", result.stderr)
+        self.assertFalse(self.marker.exists(), "invalid jobs launched OpenCode")
 
 
 class EvaluateResultTest(EvaluateTestCase):
@@ -571,7 +631,7 @@ class EvaluateResultTest(EvaluateTestCase):
     def test_error_takes_precedence_over_failure_in_report_and_exit_code(
         self,
     ) -> None:
-        prompts = {}
+        prompts: dict[str, Response] = {}
         for case in self.cases.values():
             # Expected positives error out; expected negatives trigger and fail.
             status = "error" if case["expect"] else "completed"
@@ -588,6 +648,200 @@ class EvaluateResultTest(EvaluateTestCase):
         self.assertIn("Passed: 0", result.stdout)
         self.assertIn("Failed: 3", result.stdout)
         self.assertIn("Error: 3", result.stdout)
+
+
+class EvaluateRepeatTest(EvaluateTestCase):
+    def test_each_case_and_repeat_gets_a_fresh_project(self) -> None:
+        self.trigger_expected_cases()
+
+        result = self.evaluate("--repeats", "2", "--jobs", "2")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        probes = self.probe_directories()
+        self.assertEqual(len(probes), len(self.cases) * 2)
+        self.assertEqual(len(set(probes)), len(probes))
+        prompts = [
+            (probe / "fake-prompt.txt").read_text(encoding="utf-8") for probe in probes
+        ]
+        for case in self.cases.values():
+            self.assertEqual(prompts.count(case["prompt"]), 2)
+        agent_names: set[str] = set()
+        for probe in probes:
+            config = self.probe_config(probe)
+            self.assertEqual(len(config["agents"]), 1)
+            agent_names.update(config["agents"])
+            skills = probe / ".opencode" / "skills"
+            self.assertEqual(
+                sorted(path.name for path in skills.iterdir() if path.is_dir()),
+                ["my-skill"],
+            )
+        self.assertEqual(len(agent_names), len(probes))
+
+    def test_stable_repeats_pass_and_report_every_actual(self) -> None:
+        self.trigger_expected_cases()
+
+        result = self.evaluate("--repeats", "2")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(
+            "PASS direct-request expected=true actual=true,true matched=2/2",
+            result.stdout,
+        )
+        self.assertIn(
+            "PASS adjacent-task expected=false actual=false,false matched=2/2",
+            result.stdout,
+        )
+        self.assertIn("Passed: 6", result.stdout)
+        self.assertIn("Failed: 0", result.stdout)
+        self.assertIn("Error: 0", result.stdout)
+        self.assertIn("Cases: 6", result.stdout)
+        self.assertIn("Runs: 12", result.stdout)
+
+    def test_mixed_repeats_fail_with_all_actuals(self) -> None:
+        self.env["FAKE_OPENCODE_STATE"] = str(self.temp / "state")
+        prompts = self.triggering_prompts()
+        prompts[self.cases["direct-request"]["prompt"]] = [
+            {"stdout": skill_call_stdout("my-skill")},
+            {"stdout": "", "exit": 0},
+        ]
+        self.write_spec(prompts=prompts, default={"stdout": "", "exit": 0})
+
+        result = self.evaluate("--repeats", "2")
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(
+            "FAIL direct-request expected=true actual=true,false matched=1/2",
+            result.stdout,
+        )
+        self.assertIn("Passed: 5", result.stdout)
+        self.assertIn("Failed: 1", result.stdout)
+        self.assertIn("Error: 0", result.stdout)
+        self.assertIn("Runs: 12", result.stdout)
+
+    def test_negative_case_over_triggering_on_one_repeat_fails(self) -> None:
+        self.env["FAKE_OPENCODE_STATE"] = str(self.temp / "state")
+        prompts = self.triggering_prompts()
+        prompts[self.cases["adjacent-task"]["prompt"]] = [
+            {"stdout": skill_call_stdout("my-skill")},
+            {"stdout": "", "exit": 0},
+        ]
+        self.write_spec(prompts=prompts, default={"stdout": "", "exit": 0})
+
+        result = self.evaluate("--repeats", "2")
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(
+            "FAIL adjacent-task expected=false actual=true,false matched=1/2",
+            result.stdout,
+        )
+        self.assertIn("Passed: 5", result.stdout)
+        self.assertIn("Failed: 1", result.stdout)
+        self.assertIn("Error: 0", result.stdout)
+
+    def test_undecidable_repeat_is_error_with_match_count(self) -> None:
+        self.env["FAKE_OPENCODE_STATE"] = str(self.temp / "state")
+        prompts = self.triggering_prompts()
+        prompts[self.cases["direct-request"]["prompt"]] = [
+            {"stdout": skill_call_stdout("my-skill")},
+            {"stdout": skill_call_stdout("my-skill", status="error"), "exit": 0},
+        ]
+        self.write_spec(prompts=prompts, default={"stdout": "", "exit": 0})
+
+        result = self.evaluate("--repeats", "2")
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn(
+            "ERROR direct-request expected=true actual=true,ERROR matched=1/2",
+            result.stdout,
+        )
+        self.assertIn("Run 2: Error: target skill call failed: denied", result.stdout)
+        self.assertIn("Passed: 5", result.stdout)
+        self.assertIn("Failed: 0", result.stdout)
+        self.assertIn("Error: 1", result.stdout)
+
+    def test_undecidable_repeat_outranks_mismatch_in_the_same_case(self) -> None:
+        self.env["FAKE_OPENCODE_STATE"] = str(self.temp / "state")
+        prompts = self.triggering_prompts()
+        prompts[self.cases["direct-request"]["prompt"]] = [
+            {"stdout": "", "exit": 0},
+            {"stdout": skill_call_stdout("my-skill", status="error"), "exit": 0},
+        ]
+        self.write_spec(prompts=prompts, default={"stdout": "", "exit": 0})
+
+        result = self.evaluate("--repeats", "2")
+
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn(
+            "ERROR direct-request expected=true actual=false,ERROR matched=0/2",
+            result.stdout,
+        )
+        self.assertIn("Passed: 5", result.stdout)
+        self.assertIn("Failed: 0", result.stdout)
+        self.assertIn("Error: 1", result.stdout)
+
+
+class EvaluateParallelTest(EvaluateTestCase):
+    def probe_spans(self, events: Path) -> list[tuple[float, float]]:
+        spans: dict[int, dict[str, float]] = {}
+        for line in events.read_text(encoding="utf-8").splitlines():
+            entry = json.loads(line)
+            spans.setdefault(entry["pid"], {})[entry["event"]] = entry["time"]
+        return [
+            (span["start"], span["end"])
+            for span in spans.values()
+            if "start" in span and "end" in span
+        ]
+
+    def max_overlap(self, spans: list[tuple[float, float]]) -> int:
+        return max(
+            (
+                sum(1 for start, end in spans if start <= other_start < end)
+                for other_start, _ in spans
+            ),
+            default=0,
+        )
+
+    def test_jobs_bounds_concurrent_probes(self) -> None:
+        prompts: dict[str, Response] = {
+            case["prompt"]: {
+                "stdout": (skill_call_stdout("my-skill") if case["expect"] else ""),
+                "sleep": 0.05,
+            }
+            for case in self.cases.values()
+        }
+        self.write_spec(prompts=prompts, default={"stdout": "", "exit": 0})
+        events = self.temp / "events.jsonl"
+        self.env["FAKE_OPENCODE_EVENT_LOG"] = str(events)
+        self.env["FAKE_OPENCODE_PEER_DIR"] = str(self.temp / "peers")
+        self.env["FAKE_OPENCODE_EXPECT_PEERS"] = "2"
+
+        result = self.evaluate("--repeats", "2", "--jobs", "2")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        spans = self.probe_spans(events)
+        self.assertEqual(len(spans), len(self.cases) * 2)
+        self.assertEqual(self.max_overlap(spans), 2)
+        self.assertIn("Runs: 12", result.stdout)
+
+    def test_default_jobs_runs_one_probe_at_a_time(self) -> None:
+        prompts: dict[str, Response] = {
+            case["prompt"]: {
+                "stdout": (skill_call_stdout("my-skill") if case["expect"] else ""),
+                "sleep": 0.1,
+            }
+            for case in self.cases.values()
+        }
+        self.write_spec(prompts=prompts, default={"stdout": "", "exit": 0})
+        events = self.temp / "events.jsonl"
+        self.env["FAKE_OPENCODE_EVENT_LOG"] = str(events)
+
+        result = self.evaluate()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        spans = self.probe_spans(events)
+        self.assertEqual(len(spans), len(self.cases))
+        self.assertEqual(self.max_overlap(spans), 1)
+        self.assertIn("Runs: 6", result.stdout)
 
 
 class EvaluateProbeTest(EvaluateTestCase):
