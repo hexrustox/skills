@@ -3,6 +3,8 @@
 - User-facing skills live under `skills/<name>/`.
 - Vendored third-party skills live under `.agents/skills/` and are pinned in `skills-lock.json`; do not edit them.
 - Before creating, editing, or reviewing a skill, read `docs/agents/skill-authoring.md`.
+- To test whether a skill's description triggers, follow `docs/agents/description-trigger.md`.
+- Tool install, test, and verification commands live in `tools/description-trigger/AGENTS.md`.
 - When a skill writes a doc for agents to read, the preferred location is `docs/agents/<topic>.md` in the repo where the skill is invoked.
 
 ## Skill audit

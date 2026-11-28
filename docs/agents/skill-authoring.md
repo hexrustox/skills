@@ -2,7 +2,7 @@
 
 A skill is a directory with a `SKILL.md` at its root. It gives an agent a reusable procedure, the project-specific facts that procedure depends on, and optionally scripts and references that load only when needed.
 
-This guide covers writing a skill. Evaluation and benchmarking are out of scope.
+This guide covers writing a skill. Skill output evaluation and benchmarking are out of scope.
 
 ## Before writing
 
@@ -63,6 +63,8 @@ For a model-invocable skill, the description is the only text an agent sees befo
 For a user-invoked skill (`disable-model-invocation: true`), the user chooses when to run it, so the description is a label, not a trigger. State what the skill does and the coverage or boundary of what it changes; omit "Use when" phrasing. The `setup-*` skills are the pattern.
 
 Keep it within 1024 characters.
+
+To check whether the description triggers as intended, author and validate cases with the [description-trigger procedure](description-trigger.md). Case authoring ends at validation; evaluation runs in a separate session.
 
 ### Frontmatter
 
