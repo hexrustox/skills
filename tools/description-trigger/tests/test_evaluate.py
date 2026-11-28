@@ -1173,3 +1173,53 @@ class EvaluateSmokeTest(EvaluateTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("PASS direct-request", result.stdout)
         self.assertIn("Passed: 6", result.stdout)
+
+    def test_synthetic_fixture_reports_pass_fail_and_error_exit_codes(self) -> None:
+        self.assertEqual(len(self.cases), 6)
+        self.assertEqual(
+            sum(case["expect"] for case in self.cases.values()),
+            3,
+        )
+
+        # PASS: every positive verifies the deny-all probe and loads the target
+        # skill; every negative finishes cleanly without a target call.
+        self.write_spec(
+            prompts={
+                case["prompt"]: {"verify_probe": True}
+                for case in self.cases.values()
+                if case["expect"]
+            },
+            default={"stdout": "", "exit": 0},
+        )
+        passed = self.evaluate("--jobs", "2")
+
+        self.assertEqual(passed.returncode, 0, passed.stdout + passed.stderr)
+        self.assertIn("PASS direct-request expected=true actual=true", passed.stdout)
+        self.assertIn("PASS adjacent-task expected=false actual=false", passed.stdout)
+        self.assertIn("Passed: 6", passed.stdout)
+        self.assertIn("Failed: 0", passed.stdout)
+        self.assertIn("Error: 0", passed.stdout)
+
+        # FAIL: no prompt triggers, so every positive under-triggers while
+        # every negative still passes.
+        self.write_spec(default={"stdout": "", "exit": 0})
+        failed = self.evaluate("--jobs", "2")
+
+        self.assertEqual(failed.returncode, 1, failed.stdout + failed.stderr)
+        self.assertIn("FAIL direct-request expected=true actual=false", failed.stdout)
+        self.assertIn("PASS adjacent-task expected=false actual=false", failed.stdout)
+        self.assertIn("Passed: 3", failed.stdout)
+        self.assertIn("Failed: 3", failed.stdout)
+        self.assertIn("Error: 0", failed.stdout)
+
+        # ERROR: OpenCode exits non-zero before any target call, so every case
+        # is undecided and ERROR outranks FAIL.
+        self.write_spec(default={"stdout": "", "stderr": "probe failed\n", "exit": 1})
+        errored = self.evaluate("--jobs", "2")
+
+        self.assertEqual(errored.returncode, 2, errored.stdout + errored.stderr)
+        self.assertIn("ERROR direct-request expected=true actual=ERROR", errored.stdout)
+        self.assertIn("ERROR adjacent-task expected=false actual=ERROR", errored.stdout)
+        self.assertIn("Passed: 0", errored.stdout)
+        self.assertIn("Failed: 0", errored.stdout)
+        self.assertIn("Error: 6", errored.stdout)
